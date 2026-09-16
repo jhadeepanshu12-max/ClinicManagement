@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   Activity,
   Bell,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ClipboardList,
   CreditCard,
   FileText,
   LayoutDashboard,
+  LogOut,
   Menu,
   Package,
   Plus,
@@ -20,32 +22,41 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 
-import "./App.css";
+import "./Dashboard.css";
 
 const navigation = [
   {
     section: "MAIN",
     items: [
-      { label: "Dashboard", icon: LayoutDashboard },
-      { label: "Patients", icon: Users },
-      { label: "Doctors", icon: Stethoscope },
-      { label: "Appointments", icon: CalendarDays },
+      { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+      { label: "Patients", icon: Users, path: "/patients" },
+      { label: "Doctors", icon: Stethoscope, path: "/doctors" },
+      { label: "Appointments", icon: CalendarDays, path: "/appointments" },
     ],
   },
   {
     section: "CLINICAL",
     items: [
-      { label: "Medical Records", icon: FileText },
-      { label: "Prescriptions", icon: ClipboardList },
+      {
+        label: "Medical Records",
+        icon: FileText,
+        path: "/medical-records",
+      },
+      {
+        label: "Prescriptions",
+        icon: ClipboardList,
+        path: "/prescriptions",
+      },
     ],
   },
   {
     section: "FINANCE & STOCK",
     items: [
-      { label: "Billing", icon: CreditCard },
-      { label: "Inventory", icon: Package },
-      { label: "Expenses", icon: Wallet },
+      { label: "Billing", icon: CreditCard, path: "/billing" },
+      { label: "Inventory", icon: Package, path: "/inventory" },
+      { label: "Expenses", icon: Wallet, path: "/expenses" },
     ],
   },
 ];
@@ -77,6 +88,37 @@ const statConfig = [
   },
 ];
 
+const quickActions = [
+  {
+    title: "Add Patient",
+    description: "Register a new patient",
+    icon: UserRound,
+    color: "blue",
+    path: "/patients",
+  },
+  {
+    title: "Book Appointment",
+    description: "Schedule consultation",
+    icon: CalendarDays,
+    color: "green",
+    path: "/appointments",
+  },
+  {
+    title: "Create Medical Record",
+    description: "Add patient EMR",
+    icon: FileText,
+    color: "purple",
+    path: "/medical-records",
+  },
+  {
+    title: "Create Invoice",
+    description: "Generate patient bill",
+    icon: CreditCard,
+    color: "orange",
+    path: "/billing",
+  },
+];
+
 const formatCurrency = (value) => {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 };
@@ -101,7 +143,9 @@ const formatStatus = (status) => {
 
   return status
     .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map(
+      (word) => word.charAt(0).toUpperCase() + word.slice(1)
+    )
     .join(" ");
 };
 
@@ -133,15 +177,38 @@ const getInitials = (name) => {
     .toUpperCase();
 };
 
+const getCurrentPage = (pathname) => {
+  const allItems = navigation.flatMap((group) => group.items);
+
+  const currentItem = allItems.find(
+    (item) => item.path === pathname
+  );
+
+  return currentItem?.label || "Dashboard";
+};
+
 function Dashboard() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchRef = useRef(null);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activePage, setActivePage] = useState("Dashboard");
 
   const [dashboardStats, setDashboardStats] = useState(null);
   const [recentAppointments, setRecentAppointments] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Separate states for the two profile menus.
+  const [topProfileOpen, setTopProfileOpen] = useState(false);
+  const [sidebarProfileOpen, setSidebarProfileOpen] = useState(false);
 
   const storedUser = localStorage.getItem("clinic_user");
 
@@ -155,35 +222,63 @@ function Dashboard() {
   const userName = currentUser.name || "Admin";
   const userRole = currentUser.role || "Administrator";
 
+  const activePage = getCurrentPage(location.pathname);
+
+  const token = localStorage.getItem("clinic_token");
+
+  const headers = useMemo(
+    () => ({
+      Authorization: `Bearer ${token}`,
+    }),
+    [token]
+  );
+
+  const handleLogout = () => {
+    localStorage.removeItem("clinic_token");
+    localStorage.removeItem("clinic_user");
+
+    navigate("/login", { replace: true });
+  };
+
+  const goTo = (path) => {
+    setSidebarOpen(false);
+    setSearchOpen(false);
+    setNotificationsOpen(false);
+    setTopProfileOpen(false);
+    setSidebarProfileOpen(false);
+
+    navigate(path);
+  };
+
+  /* =========================
+     DASHBOARD DATA
+  ========================= */
+
   useEffect(() => {
     const fetchDashboardData = async () => {
+      if (!token) {
+        navigate("/login", { replace: true });
+        return;
+      }
+
       try {
         setLoading(true);
         setError("");
 
-        const token = localStorage.getItem("clinic_token");
-
-        if (!token) {
-          setError("Authentication token not found.");
-          return;
-        }
-
-        const headers = {
-          Authorization: `Bearer ${token}`,
-        };
-
-        const [statsResponse, appointmentsResponse] = await Promise.all([
-          axios.get(
-            `${import.meta.env.VITE_API_URL}/dashboard/stats`,
-            { headers }
-          ),
-          axios.get(
-            `${import.meta.env.VITE_API_URL}/dashboard/recent-appointments?limit=5`,
-            { headers }
-          ),
-        ]);
+        const [statsResponse, appointmentsResponse] =
+          await Promise.all([
+            axios.get(
+              `${import.meta.env.VITE_API_URL}/dashboard/stats`,
+              { headers }
+            ),
+            axios.get(
+              `${import.meta.env.VITE_API_URL}/dashboard/recent-appointments?limit=5`,
+              { headers }
+            ),
+          ]);
 
         setDashboardStats(statsResponse.data.data);
+
         setRecentAppointments(
           appointmentsResponse.data.data.appointments || []
         );
@@ -191,9 +286,7 @@ function Dashboard() {
         console.error("Dashboard data error:", requestError);
 
         if (requestError.response?.status === 401) {
-          localStorage.removeItem("clinic_token");
-          localStorage.removeItem("clinic_user");
-          window.location.href = "/login";
+          handleLogout();
           return;
         }
 
@@ -207,7 +300,136 @@ function Dashboard() {
     };
 
     fetchDashboardData();
+  }, [headers, navigate, token]);
+
+  /* =========================
+     SEARCH
+  ========================= */
+
+  useEffect(() => {
+    const performSearch = async () => {
+      const query = searchTerm.trim().toLowerCase();
+
+      if (query.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+
+      try {
+        const [patientsResponse, doctorsResponse] =
+          await Promise.all([
+            axios.get(
+              `${import.meta.env.VITE_API_URL}/patients`,
+              { headers }
+            ),
+            axios.get(
+              `${import.meta.env.VITE_API_URL}/doctors`,
+              { headers }
+            ),
+          ]);
+
+        const patients =
+          patientsResponse.data.data?.patients || [];
+
+        const doctors =
+          doctorsResponse.data.data?.doctors || [];
+
+        const patientResults = patients
+          .filter((patient) => {
+            const searchableText = [
+              patient.name,
+              patient.email,
+              patient.phone,
+              patient.patientId,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+
+            return searchableText.includes(query);
+          })
+          .slice(0, 5)
+          .map((patient) => ({
+            id: patient._id,
+            type: "patient",
+            title: patient.name,
+            subtitle: patient.patientId || "Patient",
+            icon: Users,
+            path: "/patients",
+          }));
+
+        const doctorResults = doctors
+          .filter((doctor) => {
+            const user = doctor.user || {};
+
+            const searchableText = [
+              user.name,
+              user.email,
+              user.phone,
+              doctor.specialization,
+              doctor.licenseNumber,
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+
+            return searchableText.includes(query);
+          })
+          .slice(0, 5)
+          .map((doctor) => ({
+            id: doctor._id,
+            type: "doctor",
+            title: doctor.user?.name || "Doctor",
+            subtitle:
+              doctor.specialization || "Medical Specialist",
+            icon: Stethoscope,
+            path: "/doctors",
+          }));
+
+        setSearchResults([
+          ...patientResults,
+          ...doctorResults,
+        ]);
+      } catch (searchError) {
+        console.error("Search error:", searchError);
+        setSearchResults([]);
+      }
+    };
+
+    const timer = setTimeout(performSearch, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, headers]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target)
+      ) {
+        setSearchOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutsideClick
+      );
+    };
   }, []);
+
+  const handleSearchSelect = (result) => {
+    setSearchTerm("");
+    setSearchOpen(false);
+    navigate(result.path);
+  };
+
+  /* =========================
+     STATS
+  ========================= */
 
   const getStatValue = (stat) => {
     if (!dashboardStats) return "—";
@@ -234,41 +456,49 @@ function Dashboard() {
   };
 
   return (
-    <div className="app-shell">
+    <div className="dashboard-shell">
       {sidebarOpen && (
         <button
-          className="sidebar-overlay"
+          className="dashboard-sidebar-overlay"
           onClick={() => setSidebarOpen(false)}
           aria-label="Close sidebar"
         />
       )}
 
-      <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
-        <div className="sidebar-header">
-          <div className="brand-mark">
-            <Activity size={23} strokeWidth={2.5} />
+      {/* =========================
+          SIDEBAR
+      ========================= */}
+
+      <aside
+        className={`dashboard-sidebar ${
+          sidebarOpen ? "dashboard-sidebar-open" : ""
+        }`}
+      >
+        <div className="dashboard-brand">
+          <div className="dashboard-brand-mark">
+            <Activity size={23} strokeWidth={2.6} />
           </div>
 
-          <div className="brand-text">
+          <div>
             <h1>CareSync</h1>
             <span>Clinic Management</span>
           </div>
 
           <button
-            className="mobile-close"
+            className="dashboard-mobile-close"
             onClick={() => setSidebarOpen(false)}
             aria-label="Close sidebar"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="clinic-card">
-          <div className="clinic-icon">
-            <Stethoscope size={18} />
+        <div className="dashboard-clinic-card">
+          <div className="dashboard-clinic-icon">
+            <Stethoscope size={19} />
           </div>
 
-          <div>
+          <div className="dashboard-clinic-info">
             <strong>CityCare Clinic</strong>
             <span>Admin Workspace</span>
           </div>
@@ -276,10 +506,13 @@ function Dashboard() {
           <ChevronDown size={16} />
         </div>
 
-        <nav className="navigation">
+        <nav className="dashboard-navigation">
           {navigation.map((group) => (
-            <div className="nav-group" key={group.section}>
-              <p className="nav-section-title">{group.section}</p>
+            <div
+              className="dashboard-nav-group"
+              key={group.section}
+            >
+              <p>{group.section}</p>
 
               {group.items.map((item) => {
                 const Icon = item.icon;
@@ -288,16 +521,16 @@ function Dashboard() {
                 return (
                   <button
                     key={item.label}
-                    className={`nav-item ${active ? "active" : ""}`}
-                    onClick={() => {
-                      setActivePage(item.label);
-                      setSidebarOpen(false);
-                    }}
+                    className={`dashboard-nav-item ${
+                      active ? "active" : ""
+                    }`}
+                    onClick={() => goTo(item.path)}
                   >
                     <Icon
-                      size={19}
+                      size={18}
                       strokeWidth={active ? 2.4 : 2}
                     />
+
                     <span>{item.label}</span>
                   </button>
                 );
@@ -306,96 +539,353 @@ function Dashboard() {
           ))}
         </nav>
 
-        <div className="sidebar-bottom">
+        <div className="dashboard-sidebar-bottom">
+          {/* SIDEBAR SETTINGS */}
           <button
-            className={`nav-item ${
-              activePage === "Settings" ? "active" : ""
+            className={`dashboard-nav-item ${
+              location.pathname === "/settings" ? "active" : ""
             }`}
-            onClick={() => setActivePage("Settings")}
+            onClick={() => goTo("/settings")}
           >
-            <Settings size={19} />
+            <Settings size={18} />
             <span>Settings</span>
           </button>
 
-          <div className="sidebar-profile">
-            <div className="profile-avatar">
+          {/* SIDEBAR PROFILE */}
+          <button
+            className="dashboard-sidebar-profile"
+            onClick={() => {
+              setTopProfileOpen(false);
+              setNotificationsOpen(false);
+              setSidebarProfileOpen(
+                (previous) => !previous
+              );
+            }}
+          >
+            <div className="dashboard-profile-avatar">
               {getInitials(userName)}
             </div>
 
-            <div className="profile-info">
+            <div className="dashboard-profile-info">
               <strong>{userName}</strong>
               <span>{userRole}</span>
             </div>
 
             <ChevronDown size={15} />
-          </div>
+          </button>
+
+          {sidebarProfileOpen && (
+            <div className="dashboard-profile-menu sidebar-profile-menu">
+              <div className="profile-menu-user">
+                <div className="dashboard-profile-avatar">
+                  {getInitials(userName)}
+                </div>
+
+                <div>
+                  <strong>{userName}</strong>
+                  <span>{userRole}</span>
+                </div>
+              </div>
+
+              <div className="profile-menu-divider" />
+
+              <button onClick={() => goTo("/settings")}>
+                <UserRound size={16} />
+                Profile
+              </button>
+
+              <button onClick={() => goTo("/settings")}>
+                <Settings size={16} />
+                Settings
+              </button>
+
+              <button
+                className="logout-button"
+                onClick={handleLogout}
+              >
+                <LogOut size={16} />
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
-      <main className="main-content">
-        <header className="topbar">
-          <div className="topbar-left">
+      {/* =========================
+          MAIN
+      ========================= */}
+
+      <main className="dashboard-main">
+        <header className="dashboard-topbar">
+          <div className="dashboard-topbar-left">
             <button
-              className="mobile-menu"
+              className="dashboard-mobile-menu"
               onClick={() => setSidebarOpen(true)}
               aria-label="Open sidebar"
             >
-              <Menu size={22} />
+              <Menu size={21} />
             </button>
 
             <div>
-              <p className="breadcrumb">Clinic / Overview</p>
+              <p>Clinic / {activePage}</p>
               <h2>{activePage}</h2>
             </div>
           </div>
 
-          <div className="topbar-right">
-            <div className="search-box">
-              <Search size={18} />
-              <input placeholder="Search patients, doctors..." />
-              <span>⌘ K</span>
+          <div className="dashboard-topbar-right">
+            {/* SEARCH */}
+
+            <div
+              className="dashboard-search-wrapper"
+              ref={searchRef}
+            >
+              <div
+                className={`dashboard-search ${
+                  searchOpen ? "focused" : ""
+                }`}
+              >
+                <Search size={18} />
+
+                <input
+                  value={searchTerm}
+                  placeholder="Search patients, doctors..."
+                  onFocus={() => setSearchOpen(true)}
+                  onChange={(event) => {
+                    setSearchTerm(event.target.value);
+                    setSearchOpen(true);
+                  }}
+                />
+
+                <kbd>⌘ K</kbd>
+              </div>
+
+              {searchOpen &&
+                searchTerm.trim().length >= 2 && (
+                  <div className="dashboard-search-results">
+                    {searchResults.length === 0 ? (
+                      <div className="search-empty">
+                        <Search size={18} />
+                        <span>
+                          No patients or doctors found
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="search-results-heading">
+                          Search Results
+                        </div>
+
+                        {searchResults.map((result) => {
+                          const Icon = result.icon;
+
+                          return (
+                            <button
+                              key={`${result.type}-${result.id}`}
+                              className="search-result-item"
+                              onClick={() =>
+                                handleSearchSelect(result)
+                              }
+                            >
+                              <span
+                                className={`search-result-icon ${result.type}`}
+                              >
+                                <Icon size={17} />
+                              </span>
+
+                              <span className="search-result-text">
+                                <strong>
+                                  {result.title}
+                                </strong>
+
+                                <small>
+                                  {result.subtitle}
+                                </small>
+                              </span>
+
+                              <span className="search-result-type">
+                                {result.type}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                )}
             </div>
 
-            <button className="icon-button notification-button">
-              <Bell size={20} />
-              <span className="notification-dot" />
-            </button>
+            {/* NOTIFICATIONS */}
 
-            <div className="top-profile">
-              <div className="profile-avatar">
-                {getInitials(userName)}
-              </div>
+            <div className="dashboard-notification-wrapper">
+              <button
+                className={`dashboard-icon-button ${
+                  notificationsOpen ? "active" : ""
+                }`}
+                onClick={() => {
+                  setTopProfileOpen(false);
+                  setSidebarProfileOpen(false);
+                  setNotificationsOpen(
+                    (previous) => !previous
+                  );
+                }}
+                aria-label="Notifications"
+              >
+                <Bell size={19} />
+                <span className="dashboard-notification-dot" />
+              </button>
 
-              <div>
-                <strong>{userName}</strong>
-                <span>{userRole}</span>
-              </div>
+              {notificationsOpen && (
+                <div className="dashboard-notification-menu">
+                  <div className="notification-menu-header">
+                    <div>
+                      <strong>Notifications</strong>
+                      <span>Clinic updates</span>
+                    </div>
 
-              <ChevronDown size={16} />
+                    <span className="notification-count">
+                      3
+                    </span>
+                  </div>
+
+                  <div className="notification-item">
+                    <span className="notification-icon blue">
+                      <CalendarDays size={16} />
+                    </span>
+
+                    <div>
+                      <strong>Appointments</strong>
+                      <p>
+                        Check today&apos;s appointment
+                        schedule.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="notification-item">
+                    <span className="notification-icon orange">
+                      <Package size={16} />
+                    </span>
+
+                    <div>
+                      <strong>Inventory</strong>
+                      <p>
+                        Keep an eye on low stock items.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="notification-item">
+                    <span className="notification-icon green">
+                      <CheckCircle2 size={16} />
+                    </span>
+
+                    <div>
+                      <strong>System Online</strong>
+                      <p>
+                        Backend and database are connected.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* TOP PROFILE */}
+
+            <div className="dashboard-top-profile-wrapper">
+              <button
+                className="dashboard-top-profile"
+                onClick={() => {
+                  setSidebarProfileOpen(false);
+                  setNotificationsOpen(false);
+                  setTopProfileOpen(
+                    (previous) => !previous
+                  );
+                }}
+              >
+                <div className="dashboard-profile-avatar">
+                  {getInitials(userName)}
+                </div>
+
+                <div className="dashboard-top-profile-info">
+                  <strong>{userName}</strong>
+                  <span>{userRole}</span>
+                </div>
+
+                <ChevronDown size={15} />
+              </button>
+
+              {topProfileOpen && (
+                <div className="dashboard-profile-menu">
+                  <div className="profile-menu-user">
+                    <div className="dashboard-profile-avatar">
+                      {getInitials(userName)}
+                    </div>
+
+                    <div>
+                      <strong>{userName}</strong>
+                      <span>{userRole}</span>
+                    </div>
+                  </div>
+
+                  <div className="profile-menu-divider" />
+
+                  <button
+                    onClick={() => goTo("/settings")}
+                  >
+                    <UserRound size={16} />
+                    Profile
+                  </button>
+
+                  <button
+                    onClick={() => goTo("/settings")}
+                  >
+                    <Settings size={16} />
+                    Settings
+                  </button>
+
+                  <button
+                    className="logout-button"
+                    onClick={handleLogout}
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
 
-        <div className="dashboard-container">
-          <section className="welcome-row">
+        <div className="dashboard-content">
+          {/* WELCOME */}
+
+          <section className="dashboard-welcome">
             <div>
-              <p className="eyebrow">
+              <span className="dashboard-date">
                 {new Date().toLocaleDateString("en-IN", {
                   weekday: "long",
                   month: "long",
                   day: "numeric",
                   year: "numeric",
                 })}
-              </p>
+              </span>
 
-              <h3>Good afternoon, {userName} 👋</h3>
+              <h3>
+                Good afternoon, {userName}{" "}
+                <span>👋</span>
+              </h3>
 
-              <p className="welcome-text">
-                Here&apos;s what&apos;s happening at your clinic today.
+              <p>
+                Here&apos;s what&apos;s happening at your
+                clinic today.
               </p>
             </div>
 
-            <button className="primary-button">
+            <button
+              className="dashboard-primary-button"
+              onClick={() => navigate("/appointments")}
+            >
               <Plus size={18} />
               New Appointment
             </button>
@@ -407,38 +897,46 @@ function Dashboard() {
             </div>
           )}
 
-          <section className="stats-grid">
+          {/* STATS */}
+
+          <section className="dashboard-stats-grid">
             {statConfig.map((stat) => {
               const Icon = stat.icon;
 
               return (
-                <article className="stat-card" key={stat.title}>
-                  <div className="stat-card-top">
-                    <div className={`stat-icon ${stat.type}`}>
+                <article
+                  className={`dashboard-stat-card ${stat.type}`}
+                  key={stat.title}
+                >
+                  <div className="dashboard-stat-top">
+                    <div className="dashboard-stat-icon">
                       <Icon size={21} />
                     </div>
 
-                    <span className="stat-change neutral">
+                    <span className="dashboard-live-pill">
+                      <span />
                       Live
                     </span>
                   </div>
 
-                  <div className="stat-value">
+                  <div className="dashboard-stat-number">
                     {loading ? "..." : getStatValue(stat)}
                   </div>
 
-                  <div className="stat-label">
+                  <div className="dashboard-stat-title">
                     <strong>{stat.title}</strong>
-                    <span>from database</span>
+                    <span>From database</span>
                   </div>
                 </article>
               );
             })}
           </section>
 
-          <section className="dashboard-grid">
-            <article className="panel appointments-panel">
-              <div className="panel-header">
+          {/* APPOINTMENTS + QUICK ACTIONS */}
+
+          <section className="dashboard-main-grid">
+            <article className="dashboard-panel appointments-panel">
+              <div className="dashboard-panel-header">
                 <div>
                   <h4>Recent Appointments</h4>
                   <p>
@@ -446,18 +944,20 @@ function Dashboard() {
                   </p>
                 </div>
 
-                <button className="text-button">
+                <button
+                  onClick={() => navigate("/appointments")}
+                >
                   View all
                 </button>
               </div>
 
-              <div className="appointments-list">
+              <div className="dashboard-appointments-list">
                 {loading ? (
-                  <div className="empty-state">
+                  <div className="dashboard-empty">
                     Loading appointments...
                   </div>
                 ) : recentAppointments.length === 0 ? (
-                  <div className="empty-state">
+                  <div className="dashboard-empty">
                     No appointments found.
                   </div>
                 ) : (
@@ -470,37 +970,34 @@ function Dashboard() {
 
                     return (
                       <div
-                        className="appointment-row"
+                        className="dashboard-appointment-row"
                         key={appointment._id}
                       >
-                        <div className="patient-avatar">
+                        <div className="dashboard-patient-avatar">
                           {getInitials(patient.name)}
                         </div>
 
-                        <div className="appointment-info">
+                        <div className="dashboard-appointment-info">
                           <strong>
-                            {patient.name || "Unknown Patient"}
+                            {patient.name ||
+                              "Unknown Patient"}
                           </strong>
 
                           <span>
-                            {doctor.name ||
-                              "Doctor"}{" "}
-                            ·{" "}
+                            {doctor.name || "Doctor"} ·{" "}
                             {doctor.specialization ||
                               "General"}
                           </span>
                         </div>
 
-                        <div className="appointment-time">
-                          <strong>
-                            {formatAppointmentTime(
-                              appointment.appointmentTime
-                            )}
-                          </strong>
+                        <div className="dashboard-appointment-time">
+                          {formatAppointmentTime(
+                            appointment.appointmentTime
+                          )}
                         </div>
 
                         <span
-                          className={`status ${getStatusClass(
+                          className={`dashboard-status ${getStatusClass(
                             appointment.status
                           )}`}
                         >
@@ -515,97 +1012,67 @@ function Dashboard() {
               </div>
             </article>
 
-            <article className="panel quick-panel">
-              <div className="panel-header">
+            <article className="dashboard-panel quick-panel">
+              <div className="dashboard-panel-header">
                 <div>
                   <h4>Quick Actions</h4>
-                  <p>Frequently used clinic actions</p>
+                  <p>
+                    Frequently used clinic actions
+                  </p>
                 </div>
               </div>
 
-              <div className="quick-actions">
-                <button>
-                  <span className="quick-icon blue">
-                    <UserRound size={20} />
-                  </span>
+              <div className="dashboard-quick-actions">
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
 
-                  <span>
-                    <strong>Add Patient</strong>
-                    <small>
-                      Register a new patient
-                    </small>
-                  </span>
+                  return (
+                    <button
+                      key={action.title}
+                      onClick={() => goTo(action.path)}
+                    >
+                      <span
+                        className={`dashboard-quick-icon ${action.color}`}
+                      >
+                        <Icon size={19} />
+                      </span>
 
-                  <Plus size={18} />
-                </button>
+                      <span className="quick-action-text">
+                        <strong>{action.title}</strong>
+                        <small>
+                          {action.description}
+                        </small>
+                      </span>
 
-                <button>
-                  <span className="quick-icon green">
-                    <CalendarDays size={20} />
-                  </span>
-
-                  <span>
-                    <strong>Book Appointment</strong>
-                    <small>
-                      Schedule consultation
-                    </small>
-                  </span>
-
-                  <Plus size={18} />
-                </button>
-
-                <button>
-                  <span className="quick-icon purple">
-                    <FileText size={20} />
-                  </span>
-
-                  <span>
-                    <strong>
-                      Create Medical Record
-                    </strong>
-                    <small>Add patient EMR</small>
-                  </span>
-
-                  <Plus size={18} />
-                </button>
-
-                <button>
-                  <span className="quick-icon orange">
-                    <CreditCard size={20} />
-                  </span>
-
-                  <span>
-                    <strong>Create Invoice</strong>
-                    <small>
-                      Generate patient bill
-                    </small>
-                  </span>
-
-                  <Plus size={18} />
-                </button>
+                      <Plus size={17} />
+                    </button>
+                  );
+                })}
               </div>
             </article>
           </section>
 
-          <section className="bottom-grid">
-            <article className="panel overview-panel">
-              <div className="panel-header">
+          {/* OVERVIEW + SYSTEM */}
+
+          <section className="dashboard-bottom-grid">
+            <article className="dashboard-panel">
+              <div className="dashboard-panel-header">
                 <div>
                   <h4>Clinic Overview</h4>
-                  <p>Current operational snapshot</p>
+                  <p>
+                    Current operational snapshot
+                  </p>
                 </div>
 
-                <span className="live-badge">
+                <span className="dashboard-live-badge">
                   <span />
                   Live
                 </span>
               </div>
 
-              <div className="overview-items">
-                <div>
-                  <span className="overview-label">
-                    Completed Visits
-                  </span>
+              <div className="dashboard-overview-grid">
+                <div className="overview-blue">
+                  <span>Completed Visits</span>
 
                   <strong>
                     {loading
@@ -617,10 +1084,8 @@ function Dashboard() {
                   <small>All time</small>
                 </div>
 
-                <div>
-                  <span className="overview-label">
-                    Waiting / Scheduled
-                  </span>
+                <div className="overview-green">
+                  <span>Waiting / Scheduled</span>
 
                   <strong>
                     {loading
@@ -632,10 +1097,8 @@ function Dashboard() {
                   <small>Current</small>
                 </div>
 
-                <div>
-                  <span className="overview-label">
-                    Low Stock Items
-                  </span>
+                <div className="overview-purple">
+                  <span>Low Stock Items</span>
 
                   <strong>
                     {loading
@@ -647,10 +1110,8 @@ function Dashboard() {
                   <small>Needs attention</small>
                 </div>
 
-                <div>
-                  <span className="overview-label">
-                    Pending Bills
-                  </span>
+                <div className="overview-orange">
+                  <span>Pending Bills</span>
 
                   <strong>
                     {loading
@@ -666,29 +1127,29 @@ function Dashboard() {
               </div>
             </article>
 
-            <article className="panel activity-panel">
-              <div className="panel-header">
+            <article className="dashboard-panel">
+              <div className="dashboard-panel-header">
                 <div>
                   <h4>System Status</h4>
                   <p>Application services</p>
                 </div>
               </div>
 
-              <div className="system-status">
+              <div className="dashboard-system-status">
                 <div>
-                  <span className="system-dot online" />
+                  <span className="system-status-dot green" />
                   <span>Backend API</span>
                   <strong>Online</strong>
                 </div>
 
                 <div>
-                  <span className="system-dot online" />
+                  <span className="system-status-dot blue" />
                   <span>Database</span>
                   <strong>Connected</strong>
                 </div>
 
                 <div>
-                  <span className="system-dot online" />
+                  <span className="system-status-dot purple" />
                   <span>Authentication</span>
                   <strong>Active</strong>
                 </div>

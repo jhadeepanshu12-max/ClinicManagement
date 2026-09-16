@@ -85,20 +85,56 @@ const expenseSchema = new mongoose.Schema(
   }
 );
 
+expenseSchema.index({ category: 1 });
+expenseSchema.index({ expenseDate: -1 });
+expenseSchema.index({ createdBy: 1 });
+expenseSchema.index({ isActive: 1 });
+
+/*
+ * Generate a unique expense number.
+ *
+ * We use a separate counter document so that expense numbers
+ * never repeat even if old expenses are deleted.
+ */
 expenseSchema.pre("save", async function () {
   if (this.expenseNumber) {
     return;
   }
 
-  const count = await mongoose.model("Expense").countDocuments();
+  const Counter =
+    mongoose.models.ExpenseCounter ||
+    mongoose.model(
+      "ExpenseCounter",
+      new mongoose.Schema(
+        {
+          name: {
+            type: String,
+            unique: true,
+            required: true,
+          },
+          sequence: {
+            type: Number,
+            default: 0,
+          },
+        },
+        {
+          timestamps: true,
+        }
+      )
+    );
 
-  this.expenseNumber = `EXP-${String(count + 1).padStart(5, "0")}`;
+  const counter = await Counter.findOneAndUpdate(
+    { name: "expense" },
+    { $inc: { sequence: 1 } },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    }
+  );
+
+  this.expenseNumber = `EXP-${String(counter.sequence).padStart(5, "0")}`;
 });
-
-expenseSchema.index({ category: 1 });
-expenseSchema.index({ expenseDate: -1 });
-expenseSchema.index({ createdBy: 1 });
-expenseSchema.index({ isActive: 1 });
 
 const Expense = mongoose.model("Expense", expenseSchema);
 
