@@ -1,88 +1,107 @@
-const bcrypt = require("bcryptjs");
 const User = require("../models/user");
+const Doctor = require("../models/doctor");
 
-/*
-  GET ALL STAFF USERS
-  Admin only
-*/
 const getUsers = async (req, res) => {
   try {
     const users = await User.find({
-      role: {
-        $in: ["doctor", "receptionist"],
-      },
-    }).select("-password");
+      role: { $in: ["doctor", "receptionist"] },
+    })
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    // Create missing Doctor profiles for existing doctor accounts.
+    const doctorUsers = users.filter(
+      (user) => user.role === "doctor"
+    );
+
+    await Promise.all(
+      doctorUsers.map(async (user) => {
+        const existingDoctor = await Doctor.findOne({
+          user: user._id,
+        });
+
+        if (existingDoctor) {
+          return;
+        }
+
+        try {
+          await Doctor.create({
+            user: user._id,
+            specialization: "General Medicine",
+            qualification: "MBBS",
+            licenseNumber: `USR-${user._id}`,
+            experience: 0,
+            consultationFee: 0,
+            availableDays: [],
+            availability: {
+              startTime: "",
+              endTime: "",
+            },
+            department: "General Medicine",
+            bio: "",
+            createdBy: req.user._id,
+            isActive: user.isActive,
+          });
+        } catch (profileError) {
+          console.error(
+            `Doctor profile sync failed for ${user.email}:`,
+            profileError.message
+          );
+        }
+      })
+    );
 
     return res.status(200).json({
       success: true,
-      count: users.length,
+      message: "Users retrieved successfully.",
       data: {
         users,
       },
     });
   } catch (error) {
-    console.error("Get users error:", error);
+    console.error("Get managed users error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Server error while fetching users.",
+      message: "Server error while retrieving users.",
     });
   }
 };
 
-/*
-  GET SINGLE USER
-  Admin only
-*/
 const getUserById = async (req, res) => {
   try {
-    const user = await User.findById(
-      req.params.id
-    ).select("-password");
+    const user = await User.findOne({
+      _id: req.params.id,
+      role: { $in: ["doctor", "receptionist"] },
+    }).select("-password");
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found.",
-      });
-    }
-
-    if (
-      !["doctor", "receptionist"].includes(
-        user.role
-      )
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "This account cannot be managed from user management.",
+        message: "Doctor or staff user not found.",
       });
     }
 
     return res.status(200).json({
       success: true,
+      message: "User retrieved successfully.",
       data: {
         user,
       },
     });
   } catch (error) {
-    console.error(
-      "Get user by ID error:",
-      error
-    );
+    console.error("Get managed user error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Server error while fetching user.",
+      message: "Server error while retrieving user.",
     });
   }
 };
 
-/*
-  CREATE DOCTOR OR STAFF
-  Admin only
-*/
 const createUser = async (req, res) => {
+  let createdUser = null;
+
   try {
     const {
       name,
@@ -92,42 +111,35 @@ const createUser = async (req, res) => {
       role,
     } = req.body;
 
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !role
-    ) {
+    if (!name || name.trim().length < 2) {
       return res.status(400).json({
         success: false,
-        message:
-          "Name, email, password and role are required.",
+        message: "Name must be at least 2 characters.",
       });
     }
 
-    if (
-      !["doctor", "receptionist"].includes(
-        role
-      )
-    ) {
+    if (!email || !email.trim()) {
       return res.status(400).json({
         success: false,
-        message:
-          "Only doctor or receptionist accounts can be created here.",
+        message: "Email is required.",
       });
     }
 
-    if (password.length < 6) {
+    if (!password || password.length < 6) {
       return res.status(400).json({
         success: false,
-        message:
-          "Password must be at least 6 characters long.",
+        message: "Password must be at least 6 characters.",
       });
     }
 
-    const normalizedEmail = email
-      .trim()
-      .toLowerCase();
+    if (!["doctor", "receptionist"].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Role must be doctor or receptionist.",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
 
     const existingUser = await User.findOne({
       email: normalizedEmail,
@@ -136,85 +148,89 @@ const createUser = async (req, res) => {
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message:
-          "An account with this email already exists.",
+        message: "A user with this email already exists.",
       });
     }
 
-    const user = await User.create({
+    createdUser = await User.create({
       name: name.trim(),
       email: normalizedEmail,
-      phone: phone?.trim() || "",
+      phone: phone?.trim() || undefined,
       password,
       role,
       isActive: true,
     });
 
+    // Create Doctor clinical profile automatically
+    // when a Doctor login account is created.
+    if (role === "doctor") {
+      await Doctor.create({
+        user: createdUser._id,
+        specialization: "General Medicine",
+        qualification: "MBBS",
+        licenseNumber: `USR-${createdUser._id}`,
+        experience: 0,
+        consultationFee: 0,
+        availableDays: [],
+        availability: {
+          startTime: "",
+          endTime: "",
+        },
+        department: "General Medicine",
+        bio: "",
+        createdBy: req.user._id,
+        isActive: true,
+      });
+    }
+
     const safeUser = await User.findById(
-      user._id
+      createdUser._id
     ).select("-password");
 
     return res.status(201).json({
       success: true,
       message:
         role === "doctor"
-          ? "Doctor account created successfully."
+          ? "Doctor account and profile created successfully."
           : "Staff account created successfully.",
       data: {
         user: safeUser,
       },
     });
   } catch (error) {
-    console.error(
-      "Create user error:",
-      error
-    );
+    console.error("Create managed user error:", error);
+
+    // Rollback User if Doctor profile creation fails.
+    if (createdUser?._id) {
+      try {
+        await User.findByIdAndDelete(
+          createdUser._id
+        );
+      } catch (rollbackError) {
+        console.error(
+          "User rollback error:",
+          rollbackError.message
+        );
+      }
+    }
 
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
         message:
-          "An account with this email already exists.",
+          "A user or doctor profile with the provided unique value already exists.",
       });
     }
 
     return res.status(500).json({
       success: false,
-      message:
-        "Server error while creating account.",
+      message: "Server error while creating user.",
     });
   }
 };
 
-/*
-  UPDATE DOCTOR OR STAFF
-  Admin only
-*/
 const updateUser = async (req, res) => {
   try {
-    const user = await User.findById(
-      req.params.id
-    );
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found.",
-      });
-    }
-
-    if (
-      !["doctor", "receptionist"].includes(
-        user.role
-      )
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "This account cannot be managed here.",
-      });
-    }
-
     const {
       name,
       email,
@@ -223,35 +239,56 @@ const updateUser = async (req, res) => {
       isActive,
     } = req.body;
 
+    const user = await User.findOne({
+      _id: req.params.id,
+      role: {
+        $in: ["doctor", "receptionist"],
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Doctor or staff user not found.",
+      });
+    }
+
     if (name !== undefined) {
-      if (!name.trim()) {
+      if (!String(name).trim()) {
         return res.status(400).json({
           success: false,
           message: "Name cannot be empty.",
         });
       }
 
-      user.name = name.trim();
+      user.name = String(name).trim();
     }
 
     if (email !== undefined) {
-      const normalizedEmail = email
+      const normalizedEmail = String(
+        email
+      )
         .trim()
         .toLowerCase();
 
-      const existingUser =
+      if (!normalizedEmail) {
+        return res.status(400).json({
+          success: false,
+          message: "Email cannot be empty.",
+        });
+      }
+
+      const emailOwner =
         await User.findOne({
           email: normalizedEmail,
-          _id: {
-            $ne: user._id,
-          },
+          _id: { $ne: user._id },
         });
 
-      if (existingUser) {
+      if (emailOwner) {
         return res.status(409).json({
           success: false,
           message:
-            "Another account already uses this email.",
+            "Another user already uses this email.",
         });
       }
 
@@ -259,7 +296,7 @@ const updateUser = async (req, res) => {
     }
 
     if (phone !== undefined) {
-      user.phone = phone.trim();
+      user.phone = String(phone).trim();
     }
 
     if (role !== undefined) {
@@ -271,36 +308,88 @@ const updateUser = async (req, res) => {
         return res.status(400).json({
           success: false,
           message:
-            "Invalid staff role.",
+            "Role must be doctor or receptionist.",
         });
       }
 
-      user.role = role;
+      if (role !== user.role) {
+        // Doctor -> Receptionist
+        if (role === "receptionist") {
+          await Doctor.findOneAndUpdate(
+            { user: user._id },
+            { isActive: false }
+          );
+        }
+
+        // Receptionist -> Doctor
+        if (role === "doctor") {
+          const existingDoctor =
+            await Doctor.findOne({
+              user: user._id,
+            });
+
+          if (!existingDoctor) {
+            await Doctor.create({
+              user: user._id,
+              specialization:
+                "General Medicine",
+              qualification: "MBBS",
+              licenseNumber: `USR-${user._id}`,
+              experience: 0,
+              consultationFee: 0,
+              availableDays: [],
+              availability: {
+                startTime: "",
+                endTime: "",
+              },
+              department:
+                "General Medicine",
+              bio: "",
+              createdBy: req.user._id,
+              isActive: user.isActive,
+            });
+          } else {
+            existingDoctor.isActive =
+              user.isActive;
+
+            await existingDoctor.save();
+          }
+        }
+
+        user.role = role;
+      }
     }
 
     if (isActive !== undefined) {
-      user.isActive = Boolean(
-        isActive
-      );
+      user.isActive = Boolean(isActive);
+
+      if (user.role === "doctor") {
+        await Doctor.findOneAndUpdate(
+          { user: user._id },
+          {
+            isActive: user.isActive,
+          }
+        );
+      }
     }
 
     await user.save();
 
-    const safeUser = await User.findById(
-      user._id
-    ).select("-password");
+    const safeUser =
+      await User.findById(
+        user._id
+      ).select("-password");
 
     return res.status(200).json({
       success: true,
-      message:
-        "User account updated successfully.",
+      message: "User updated successfully.",
       data: {
         user: safeUser,
       },
     });
   } catch (error) {
     console.error(
-      "Update user error:",
+      "Update managed user error:",
       error
     );
 
@@ -308,65 +397,46 @@ const updateUser = async (req, res) => {
       return res.status(409).json({
         success: false,
         message:
-          "Another account already uses this email.",
+          "A user with this email already exists.",
       });
     }
 
     return res.status(500).json({
       success: false,
       message:
-        "Server error while updating account.",
+        "Server error while updating user.",
     });
   }
 };
 
-/*
-  RESET PASSWORD
-  Admin only
-*/
-const resetPassword = async (
-  req,
-  res
-) => {
+const resetPassword = async (req, res) => {
   try {
     const { password } = req.body;
 
-    if (!password) {
+    if (!password || password.length < 6) {
       return res.status(400).json({
         success: false,
         message:
-          "New password is required.",
+          "Password must be at least 6 characters.",
       });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must be at least 6 characters long.",
-      });
-    }
-
-    const user = await User.findById(
-      req.params.id
-    ).select("+password");
+    const user =
+      await User.findOne({
+        _id: req.params.id,
+        role: {
+          $in: [
+            "doctor",
+            "receptionist",
+          ],
+        },
+      }).select("+password");
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found.",
-      });
-    }
-
-    if (
-      !["doctor", "receptionist"].includes(
-        user.role
-      )
-    ) {
-      return res.status(403).json({
-        success: false,
         message:
-          "Password reset is not available for this account.",
+          "Doctor or staff user not found.",
       });
     }
 
@@ -381,7 +451,7 @@ const resetPassword = async (
     });
   } catch (error) {
     console.error(
-      "Reset password error:",
+      "Reset managed user password error:",
       error
     );
 
@@ -393,35 +463,27 @@ const resetPassword = async (
   }
 };
 
-/*
-  ACTIVATE / DEACTIVATE
-  Admin only
-*/
 const toggleUserStatus = async (
   req,
   res
 ) => {
   try {
-    const user = await User.findById(
-      req.params.id
-    );
+    const user =
+      await User.findOne({
+        _id: req.params.id,
+        role: {
+          $in: [
+            "doctor",
+            "receptionist",
+          ],
+        },
+      });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found.",
-      });
-    }
-
-    if (
-      !["doctor", "receptionist"].includes(
-        user.role
-      )
-    ) {
-      return res.status(403).json({
-        success: false,
         message:
-          "This account cannot be managed here.",
+          "Doctor or staff user not found.",
       });
     }
 
@@ -429,29 +491,39 @@ const toggleUserStatus = async (
 
     await user.save();
 
-    const safeUser = await User.findById(
-      user._id
-    ).select("-password");
+    if (user.role === "doctor") {
+      await Doctor.findOneAndUpdate(
+        { user: user._id },
+        {
+          isActive: user.isActive,
+        }
+      );
+    }
+
+    const safeUser =
+      await User.findById(
+        user._id
+      ).select("-password");
 
     return res.status(200).json({
       success: true,
       message: user.isActive
-        ? "User account activated successfully."
-        : "User account deactivated successfully.",
+        ? "User activated successfully."
+        : "User deactivated successfully.",
       data: {
         user: safeUser,
       },
     });
   } catch (error) {
     console.error(
-      "Toggle user status error:",
+      "Toggle managed user status error:",
       error
     );
 
     return res.status(500).json({
       success: false,
       message:
-        "Server error while changing account status.",
+        "Server error while changing user status.",
     });
   }
 };
