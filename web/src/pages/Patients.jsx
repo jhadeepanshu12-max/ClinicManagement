@@ -3,6 +3,7 @@ import axios from "axios";
 import {
   Activity,
   CalendarDays,
+  Edit3,
   Eye,
   FileText,
   Mail,
@@ -47,7 +48,13 @@ const getInitials = (name) => {
 const formatDate = (date) => {
   if (!date) return "—";
 
-  return new Date(date).toLocaleDateString("en-IN", {
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "—";
+  }
+
+  return parsedDate.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -56,11 +63,28 @@ const formatDate = (date) => {
 
 const formatGender = (gender) => {
   if (!gender) return "—";
-  return gender.charAt(0).toUpperCase() + gender.slice(1);
+
+  return (
+    gender.charAt(0).toUpperCase() +
+    gender.slice(1)
+  );
+};
+
+const getDateInputValue = (date) => {
+  if (!date) return "";
+
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  return parsedDate.toISOString().slice(0, 10);
 };
 
 const Patients = () => {
   const [patients, setPatients] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -68,12 +92,17 @@ const Patients = () => {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
+
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState(initialForm);
 
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [editingPatient, setEditingPatient] = useState(null);
+
   const [medicalRecords, setMedicalRecords] = useState([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState("");
@@ -85,7 +114,9 @@ const Patients = () => {
   const handleUnauthorized = () => {
     localStorage.removeItem("clinic_token");
     localStorage.removeItem("clinic_user");
-    window.location.href = "/login";
+    localStorage.removeItem("authenticated_role");
+
+    window.location.href = "/role-selection";
   };
 
   const fetchPatients = async () => {
@@ -109,9 +140,14 @@ const Patients = () => {
         }
       );
 
-      setPatients(response.data.data.patients || []);
+      setPatients(
+        response.data?.data?.patients || []
+      );
     } catch (requestError) {
-      console.error("Patients fetch error:", requestError);
+      console.error(
+        "Patients fetch error:",
+        requestError
+      );
 
       if (requestError.response?.status === 401) {
         handleUnauthorized();
@@ -140,10 +176,18 @@ const Patients = () => {
 
     return patients.filter((patient) => {
       return (
-        patient.name?.toLowerCase().includes(query) ||
-        patient.patientId?.toLowerCase().includes(query) ||
-        patient.phone?.toLowerCase().includes(query) ||
-        patient.email?.toLowerCase().includes(query)
+        patient.name
+          ?.toLowerCase()
+          .includes(query) ||
+        patient.patientId
+          ?.toLowerCase()
+          .includes(query) ||
+        patient.phone
+          ?.toLowerCase()
+          .includes(query) ||
+        patient.email
+          ?.toLowerCase()
+          .includes(query)
       );
     });
   }, [patients, searchTerm]);
@@ -156,6 +200,10 @@ const Patients = () => {
       [name]: value,
     }));
   };
+
+  /* =========================
+     ADD PATIENT
+  ========================= */
 
   const openAddModal = () => {
     setForm(initialForm);
@@ -191,21 +239,34 @@ const Patients = () => {
         .filter(Boolean);
 
       const payload = {
-        name: form.name,
+        name: form.name.trim(),
         dateOfBirth: form.dateOfBirth,
-        gender: form.gender,
-        phone: form.phone,
-        email: form.email || undefined,
-        address: form.address || undefined,
+        gender: form.gender.toLowerCase(),
+        phone: form.phone.trim(),
+        email: form.email.trim() || undefined,
+        address: form.address.trim() || undefined,
         bloodGroup: form.bloodGroup,
+
         emergencyContact: {
-          name: form.emergencyName || undefined,
-          phone: form.emergencyPhone || undefined,
-          relationship: form.emergencyRelationship || undefined,
+          name:
+            form.emergencyName.trim() ||
+            undefined,
+          phone:
+            form.emergencyPhone.trim() ||
+            undefined,
+          relationship:
+            form.emergencyRelationship.trim() ||
+            undefined,
         },
-        medicalHistory: form.medicalHistory || undefined,
+
+        medicalHistory:
+          form.medicalHistory.trim() ||
+          undefined,
+
         allergies,
-        notes: form.notes || undefined,
+
+        notes:
+          form.notes.trim() || undefined,
       };
 
       await axios.post(
@@ -218,10 +279,16 @@ const Patients = () => {
         }
       );
 
-      closeAddModal();
+      setShowAddModal(false);
+      setForm(initialForm);
+      setFormError("");
+
       await fetchPatients();
     } catch (requestError) {
-      console.error("Create patient error:", requestError);
+      console.error(
+        "Create patient error:",
+        requestError
+      );
 
       if (requestError.response?.status === 401) {
         handleUnauthorized();
@@ -236,6 +303,10 @@ const Patients = () => {
       setSaving(false);
     }
   };
+
+  /* =========================
+     VIEW PATIENT
+  ========================= */
 
   const openViewModal = async (patient) => {
     setSelectedPatient(patient);
@@ -252,34 +323,55 @@ const Patients = () => {
         return;
       }
 
-      const [patientResponse, recordsResponse] = await Promise.all([
-        axios.get(
-          `${import.meta.env.VITE_API_URL}/patients/${patient._id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        ),
-        axios.get(
-          `${import.meta.env.VITE_API_URL}/medical-records/patient/${patient._id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        ),
+      const patientId = patient?._id;
+
+      if (!patientId) {
+        setDetailsError(
+          "Patient ID is missing."
+        );
+        return;
+      }
+
+      const patientRequest = axios.get(
+        `${import.meta.env.VITE_API_URL}/patients/${patientId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const recordsRequest = axios.get(
+        `${import.meta.env.VITE_API_URL}/medical-records/patient/${patientId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const [
+        patientResponse,
+        recordsResponse,
+      ] = await Promise.all([
+        patientRequest,
+        recordsRequest,
       ]);
 
       setSelectedPatient(
-        patientResponse.data.data.patient || patient
+        patientResponse.data?.data?.patient ||
+          patient
       );
 
       setMedicalRecords(
-        recordsResponse.data.data.medicalRecords || []
+        recordsResponse.data?.data
+          ?.medicalRecords || []
       );
     } catch (requestError) {
-      console.error("Patient details error:", requestError);
+      console.error(
+        "Patient details error:",
+        requestError
+      );
 
       if (requestError.response?.status === 401) {
         handleUnauthorized();
@@ -304,16 +396,577 @@ const Patients = () => {
     setDetailsError("");
   };
 
+  /* =========================
+     EDIT PATIENT
+  ========================= */
+
+  const openEditModal = (patient) => {
+    if (!patient?._id) {
+      setError("Patient ID is missing.");
+      return;
+    }
+
+    setEditingPatient(patient);
+
+    setForm({
+      name: patient.name || "",
+
+      dateOfBirth: getDateInputValue(
+        patient.dateOfBirth
+      ),
+
+      gender: patient.gender || "",
+
+      phone: patient.phone || "",
+
+      email: patient.email || "",
+
+      address: patient.address || "",
+
+      bloodGroup:
+        patient.bloodGroup || "unknown",
+
+      emergencyName:
+        patient.emergencyContact?.name || "",
+
+      emergencyPhone:
+        patient.emergencyContact?.phone || "",
+
+      emergencyRelationship:
+        patient.emergencyContact?.relationship ||
+        "",
+
+      medicalHistory:
+        patient.medicalHistory || "",
+
+      allergies: Array.isArray(
+        patient.allergies
+      )
+        ? patient.allergies.join(", ")
+        : "",
+
+      notes: patient.notes || "",
+    });
+
+    setFormError("");
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    if (saving) return;
+
+    setShowEditModal(false);
+    setEditingPatient(null);
+    setForm(initialForm);
+    setFormError("");
+  };
+
+  const handleUpdatePatient = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    try {
+      setSaving(true);
+      setFormError("");
+
+      const token = getToken();
+
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+
+      const patientId =
+        editingPatient?._id;
+
+      if (!patientId) {
+        setFormError(
+          "Patient ID is missing."
+        );
+        return;
+      }
+
+      const allergies = form.allergies
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      const payload = {
+        name: form.name.trim(),
+        dateOfBirth: form.dateOfBirth,
+        gender: form.gender.toLowerCase(),
+        phone: form.phone.trim(),
+        email: form.email.trim() || undefined,
+        address: form.address.trim() || undefined,
+        bloodGroup: form.bloodGroup,
+
+        emergencyContact: {
+          name:
+            form.emergencyName.trim() ||
+            undefined,
+
+          phone:
+            form.emergencyPhone.trim() ||
+            undefined,
+
+          relationship:
+            form.emergencyRelationship.trim() ||
+            undefined,
+        },
+
+        medicalHistory:
+          form.medicalHistory.trim() ||
+          undefined,
+
+        allergies,
+
+        notes:
+          form.notes.trim() || undefined,
+      };
+
+      await axios.put(
+        `${import.meta.env.VITE_API_URL}/patients/${patientId}`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setShowEditModal(false);
+      setEditingPatient(null);
+      setForm(initialForm);
+      setFormError("");
+
+      await fetchPatients();
+
+      const updatedPatient = {
+        ...editingPatient,
+        ...payload,
+      };
+
+      setSelectedPatient(updatedPatient);
+    } catch (requestError) {
+      console.error(
+        "Update patient error:",
+        requestError
+      );
+
+      if (requestError.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      setFormError(
+        requestError.response?.data?.message ||
+          "Unable to update patient."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* =========================
+     DEACTIVATE PATIENT
+  ========================= */
+
+  const handleDeactivatePatient = async (
+    patient
+  ) => {
+    if (!patient?._id) {
+      setError("Patient ID is missing.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to deactivate ${patient.name}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeactivating(true);
+      setError("");
+
+      const token = getToken();
+
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+
+      await axios.delete(
+        `${import.meta.env.VITE_API_URL}/patients/${patient._id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (
+        selectedPatient?._id === patient._id
+      ) {
+        setShowViewModal(false);
+        setSelectedPatient(null);
+      }
+
+      await fetchPatients();
+    } catch (requestError) {
+      console.error(
+        "Deactivate patient error:",
+        requestError
+      );
+
+      if (requestError.response?.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      setError(
+        requestError.response?.data?.message ||
+          "Unable to deactivate patient."
+      );
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
+  /* =========================
+     REUSABLE FORM
+  ========================= */
+
+  const renderPatientForm = ({
+    onSubmit,
+    submitText,
+    submittingText,
+    onCancel,
+  }) => (
+    <form
+      className="patient-form"
+      onSubmit={onSubmit}
+    >
+      <div className="form-section">
+        <div className="form-section-title">
+          <UserRound size={17} />
+          <span>Basic Information</span>
+        </div>
+
+        <div className="form-grid">
+          <div className="patient-form-group full">
+            <label htmlFor="name">
+              Full Name <span>*</span>
+            </label>
+
+            <div className="patient-input">
+              <UserRound size={16} />
+
+              <input
+                id="name"
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                placeholder="Enter patient's full name"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="patient-form-group">
+            <label htmlFor="dateOfBirth">
+              Date of Birth <span>*</span>
+            </label>
+
+            <div className="patient-input">
+              <CalendarDays size={16} />
+
+              <input
+                id="dateOfBirth"
+                name="dateOfBirth"
+                type="date"
+                value={form.dateOfBirth}
+                onChange={handleChange}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="patient-form-group">
+            <label htmlFor="gender">
+              Gender <span>*</span>
+            </label>
+
+            <select
+              id="gender"
+              name="gender"
+              value={form.gender}
+              onChange={handleChange}
+              required
+            >
+              <option value="">
+                Select gender
+              </option>
+
+              <option value="male">
+                Male
+              </option>
+
+              <option value="female">
+                Female
+              </option>
+
+              <option value="other">
+                Other
+              </option>
+            </select>
+          </div>
+
+          <div className="patient-form-group">
+            <label htmlFor="phone">
+              Phone Number <span>*</span>
+            </label>
+
+            <div className="patient-input">
+              <Phone size={16} />
+
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={form.phone}
+                onChange={handleChange}
+                placeholder="Enter phone number"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="patient-form-group">
+            <label htmlFor="email">
+              Email Address
+            </label>
+
+            <div className="patient-input">
+              <Mail size={16} />
+
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="patient@example.com"
+              />
+            </div>
+          </div>
+
+          <div className="patient-form-group">
+            <label htmlFor="bloodGroup">
+              Blood Group
+            </label>
+
+            <select
+              id="bloodGroup"
+              name="bloodGroup"
+              value={form.bloodGroup}
+              onChange={handleChange}
+            >
+              <option value="unknown">
+                Unknown
+              </option>
+
+              <option value="A+">A+</option>
+              <option value="A-">A-</option>
+              <option value="B+">B+</option>
+              <option value="B-">B-</option>
+              <option value="AB+">AB+</option>
+              <option value="AB-">AB-</option>
+              <option value="O+">O+</option>
+              <option value="O-">O-</option>
+            </select>
+          </div>
+
+          <div className="patient-form-group full">
+            <label htmlFor="address">
+              Address
+            </label>
+
+            <div className="patient-input">
+              <MapPin size={16} />
+
+              <input
+                id="address"
+                name="address"
+                value={form.address}
+                onChange={handleChange}
+                placeholder="Enter complete address"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <div className="form-section-title">
+          <Phone size={17} />
+          <span>Emergency Contact</span>
+        </div>
+
+        <div className="form-grid">
+          <div className="patient-form-group">
+            <label htmlFor="emergencyName">
+              Contact Name
+            </label>
+
+            <input
+              id="emergencyName"
+              name="emergencyName"
+              value={form.emergencyName}
+              onChange={handleChange}
+              placeholder="Emergency contact name"
+            />
+          </div>
+
+          <div className="patient-form-group">
+            <label htmlFor="emergencyPhone">
+              Contact Phone
+            </label>
+
+            <input
+              id="emergencyPhone"
+              name="emergencyPhone"
+              type="tel"
+              value={form.emergencyPhone}
+              onChange={handleChange}
+              placeholder="Emergency contact number"
+            />
+          </div>
+
+          <div className="patient-form-group full">
+            <label htmlFor="emergencyRelationship">
+              Relationship
+            </label>
+
+            <input
+              id="emergencyRelationship"
+              name="emergencyRelationship"
+              value={
+                form.emergencyRelationship
+              }
+              onChange={handleChange}
+              placeholder="e.g. Father, Mother, Spouse"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <div className="form-section-title">
+          <FileText size={17} />
+          <span>Medical Information</span>
+        </div>
+
+        <div className="form-grid">
+          <div className="patient-form-group full">
+            <label htmlFor="medicalHistory">
+              Medical History
+            </label>
+
+            <textarea
+              id="medicalHistory"
+              name="medicalHistory"
+              value={form.medicalHistory}
+              onChange={handleChange}
+              placeholder="Previous illnesses, surgeries, conditions..."
+              rows="3"
+            />
+          </div>
+
+          <div className="patient-form-group full">
+            <label htmlFor="allergies">
+              Allergies
+            </label>
+
+            <input
+              id="allergies"
+              name="allergies"
+              value={form.allergies}
+              onChange={handleChange}
+              placeholder="Separate multiple allergies with commas"
+            />
+          </div>
+
+          <div className="patient-form-group full">
+            <label htmlFor="notes">
+              Notes
+            </label>
+
+            <textarea
+              id="notes"
+              name="notes"
+              value={form.notes}
+              onChange={handleChange}
+              placeholder="Additional notes about the patient..."
+              rows="3"
+            />
+          </div>
+        </div>
+      </div>
+
+      {formError && (
+        <div className="patients-error modal-error">
+          {formError}
+        </div>
+      )}
+
+      <div className="patient-form-footer">
+        <button
+          type="button"
+          className="modal-cancel-button"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="submit"
+          className="patients-primary-button"
+          disabled={saving}
+        >
+          {editingPatient ? (
+            <Edit3 size={17} />
+          ) : (
+            <Plus size={17} />
+          )}
+
+          {saving
+            ? submittingText
+            : submitText}
+        </button>
+      </div>
+    </form>
+  );
+
   return (
     <div className="patients-page">
+      {/* =========================
+          HEADER
+      ========================= */}
+
       <div className="patients-page-header">
         <div>
-          <p className="patients-eyebrow">CLINIC MANAGEMENT</p>
+          <p className="patients-eyebrow">
+            CLINIC MANAGEMENT
+          </p>
 
           <h1>Patients</h1>
 
           <p className="patients-subtitle">
-            Manage patient profiles and medical information.
+            Manage patient profiles and medical
+            information.
           </p>
         </div>
 
@@ -326,6 +979,10 @@ const Patients = () => {
         </button>
       </div>
 
+      {/* =========================
+          SUMMARY
+      ========================= */}
+
       <div className="patients-summary">
         <div className="patients-summary-icon">
           <Users size={21} />
@@ -337,6 +994,10 @@ const Patients = () => {
         </div>
       </div>
 
+      {/* =========================
+          DIRECTORY
+      ========================= */}
+
       <div className="patients-panel">
         <div className="patients-toolbar">
           <div>
@@ -344,7 +1005,10 @@ const Patients = () => {
 
             <p>
               {filteredPatients.length} patient
-              {filteredPatients.length !== 1 ? "s" : ""} found
+              {filteredPatients.length !== 1
+                ? "s"
+                : ""}{" "}
+              found
             </p>
           </div>
 
@@ -356,7 +1020,9 @@ const Patients = () => {
               placeholder="Search by name, ID, phone..."
               value={searchTerm}
               onChange={(event) =>
-                setSearchTerm(event.target.value)
+                setSearchTerm(
+                  event.target.value
+                )
               }
             />
           </div>
@@ -375,10 +1041,13 @@ const Patients = () => {
                 <Users size={24} />
               </div>
 
-              <strong>Loading patients...</strong>
+              <strong>
+                Loading patients...
+              </strong>
 
               <span>
-                Fetching patient records from the clinic database.
+                Fetching patient records from
+                the clinic database.
               </span>
             </div>
           ) : filteredPatients.length === 0 ? (
@@ -387,10 +1056,13 @@ const Patients = () => {
                 <UserRound size={24} />
               </div>
 
-              <strong>No patients found</strong>
+              <strong>
+                No patients found
+              </strong>
 
               <span>
-                Try a different search or add a new patient.
+                Try a different search or add a
+                new patient.
               </span>
             </div>
           ) : (
@@ -409,86 +1081,129 @@ const Patients = () => {
               </thead>
 
               <tbody>
-                {filteredPatients.map((patient) => (
-                  <tr key={patient._id}>
-                    <td>
-                      <div className="patient-cell">
-                        <div className="patient-table-avatar">
-                          {getInitials(patient.name)}
+                {filteredPatients.map(
+                  (patient) => (
+                    <tr key={patient._id}>
+                      <td>
+                        <div className="patient-cell">
+                          <div className="patient-table-avatar">
+                            {getInitials(
+                              patient.name
+                            )}
+                          </div>
+
+                          <div>
+                            <strong>
+                              {patient.name}
+                            </strong>
+
+                            <span>
+                              {patient.email ||
+                                "No email"}
+                            </span>
+                          </div>
                         </div>
+                      </td>
 
-                        <div>
-                          <strong>{patient.name}</strong>
-                          <span>
-                            {patient.email || "No email"}
-                          </span>
+                      <td>
+                        <span className="patient-id">
+                          {patient.patientId ||
+                            "—"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="contact-text">
+                          {patient.phone ||
+                            "—"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="capitalize-text">
+                          {formatGender(
+                            patient.gender
+                          )}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="blood-group">
+                          {patient.bloodGroup ||
+                            "Unknown"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="date-text">
+                          {formatDate(
+                            patient.createdAt
+                          )}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="patient-status">
+                          <span />
+                          Active
+                        </span>
+                      </td>
+
+                      <td>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                            alignItems:
+                              "center",
+                          }}
+                        >
+                          <button
+                            className="patient-view-button"
+                            title="View patient"
+                            onClick={() =>
+                              openViewModal(
+                                patient
+                              )
+                            }
+                          >
+                            <Eye size={16} />
+                          </button>
+
+                          <button
+                            className="patient-view-button"
+                            title="Edit patient"
+                            onClick={() =>
+                              openEditModal(
+                                patient
+                              )
+                            }
+                          >
+                            <Edit3 size={16} />
+                          </button>
                         </div>
-                      </div>
-                    </td>
-
-                    <td>
-                      <span className="patient-id">
-                        {patient.patientId}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span className="contact-text">
-                        {patient.phone}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span className="capitalize-text">
-                        {formatGender(patient.gender)}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span className="blood-group">
-                        {patient.bloodGroup || "Unknown"}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span className="date-text">
-                        {formatDate(patient.createdAt)}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span className="patient-status">
-                        <span />
-                        Active
-                      </span>
-                    </td>
-
-                    <td>
-                      <button
-                        className="patient-view-button"
-                        title="View patient"
-                        onClick={() =>
-                          openViewModal(patient)
-                        }
-                      >
-                        <Eye size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           )}
         </div>
       </div>
 
-      {/* Add Patient Modal */}
+      {/* =========================
+          ADD PATIENT MODAL
+      ========================= */}
 
       {showAddModal && (
         <div
           className="patient-modal-overlay"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
               closeAddModal();
             }
           }}
@@ -496,10 +1211,13 @@ const Patients = () => {
           <div className="patient-modal">
             <div className="patient-modal-header">
               <div>
-                <h2>Add New Patient</h2>
+                <h2>
+                  Add New Patient
+                </h2>
 
                 <p>
-                  Create a new patient profile in the clinic system.
+                  Create a new patient profile
+                  in the clinic system.
                 </p>
               </div>
 
@@ -512,567 +1230,543 @@ const Patients = () => {
               </button>
             </div>
 
-            <form
-              className="patient-form"
-              onSubmit={handleSubmit}
-            >
-              <div className="form-section">
-                <div className="form-section-title">
-                  <UserRound size={17} />
-                  <span>Basic Information</span>
-                </div>
-
-                <div className="form-grid">
-                  <div className="patient-form-group full">
-                    <label htmlFor="name">
-                      Full Name <span>*</span>
-                    </label>
-
-                    <div className="patient-input">
-                      <UserRound size={16} />
-
-                      <input
-                        id="name"
-                        name="name"
-                        value={form.name}
-                        onChange={handleChange}
-                        placeholder="Enter patient's full name"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="patient-form-group">
-                    <label htmlFor="dateOfBirth">
-                      Date of Birth <span>*</span>
-                    </label>
-
-                    <div className="patient-input">
-                      <CalendarDays size={16} />
-
-                      <input
-                        id="dateOfBirth"
-                        name="dateOfBirth"
-                        type="date"
-                        value={form.dateOfBirth}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="patient-form-group">
-                    <label htmlFor="gender">
-                      Gender <span>*</span>
-                    </label>
-
-                    <select
-                      id="gender"
-                      name="gender"
-                      value={form.gender}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="">
-                        Select gender
-                      </option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  <div className="patient-form-group">
-                    <label htmlFor="phone">
-                      Phone Number <span>*</span>
-                    </label>
-
-                    <div className="patient-input">
-                      <Phone size={16} />
-
-                      <input
-                        id="phone"
-                        name="phone"
-                        type="tel"
-                        value={form.phone}
-                        onChange={handleChange}
-                        placeholder="Enter phone number"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="patient-form-group">
-                    <label htmlFor="email">
-                      Email Address
-                    </label>
-
-                    <div className="patient-input">
-                      <Mail size={16} />
-
-                      <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value={form.email}
-                        onChange={handleChange}
-                        placeholder="patient@example.com"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="patient-form-group">
-                    <label htmlFor="bloodGroup">
-                      Blood Group
-                    </label>
-
-                    <select
-                      id="bloodGroup"
-                      name="bloodGroup"
-                      value={form.bloodGroup}
-                      onChange={handleChange}
-                    >
-                      <option value="unknown">
-                        Unknown
-                      </option>
-                      <option value="A+">A+</option>
-                      <option value="A-">A-</option>
-                      <option value="B+">B+</option>
-                      <option value="B-">B-</option>
-                      <option value="AB+">AB+</option>
-                      <option value="AB-">AB-</option>
-                      <option value="O+">O+</option>
-                      <option value="O-">O-</option>
-                    </select>
-                  </div>
-
-                  <div className="patient-form-group full">
-                    <label htmlFor="address">
-                      Address
-                    </label>
-
-                    <div className="patient-input">
-                      <MapPin size={16} />
-
-                      <input
-                        id="address"
-                        name="address"
-                        value={form.address}
-                        onChange={handleChange}
-                        placeholder="Enter complete address"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-section">
-                <div className="form-section-title">
-                  <Phone size={17} />
-                  <span>Emergency Contact</span>
-                </div>
-
-                <div className="form-grid">
-                  <div className="patient-form-group">
-                    <label htmlFor="emergencyName">
-                      Contact Name
-                    </label>
-
-                    <input
-                      id="emergencyName"
-                      name="emergencyName"
-                      value={form.emergencyName}
-                      onChange={handleChange}
-                      placeholder="Emergency contact name"
-                    />
-                  </div>
-
-                  <div className="patient-form-group">
-                    <label htmlFor="emergencyPhone">
-                      Contact Phone
-                    </label>
-
-                    <input
-                      id="emergencyPhone"
-                      name="emergencyPhone"
-                      type="tel"
-                      value={form.emergencyPhone}
-                      onChange={handleChange}
-                      placeholder="Emergency contact number"
-                    />
-                  </div>
-
-                  <div className="patient-form-group full">
-                    <label htmlFor="emergencyRelationship">
-                      Relationship
-                    </label>
-
-                    <input
-                      id="emergencyRelationship"
-                      name="emergencyRelationship"
-                      value={form.emergencyRelationship}
-                      onChange={handleChange}
-                      placeholder="e.g. Father, Mother, Spouse"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-section">
-                <div className="form-section-title">
-                  <FileText size={17} />
-                  <span>Medical Information</span>
-                </div>
-
-                <div className="form-grid">
-                  <div className="patient-form-group full">
-                    <label htmlFor="medicalHistory">
-                      Medical History
-                    </label>
-
-                    <textarea
-                      id="medicalHistory"
-                      name="medicalHistory"
-                      value={form.medicalHistory}
-                      onChange={handleChange}
-                      placeholder="Previous illnesses, surgeries, conditions..."
-                      rows="3"
-                    />
-                  </div>
-
-                  <div className="patient-form-group full">
-                    <label htmlFor="allergies">
-                      Allergies
-                    </label>
-
-                    <input
-                      id="allergies"
-                      name="allergies"
-                      value={form.allergies}
-                      onChange={handleChange}
-                      placeholder="Separate multiple allergies with commas"
-                    />
-                  </div>
-
-                  <div className="patient-form-group full">
-                    <label htmlFor="notes">
-                      Notes
-                    </label>
-
-                    <textarea
-                      id="notes"
-                      name="notes"
-                      value={form.notes}
-                      onChange={handleChange}
-                      placeholder="Additional notes about the patient..."
-                      rows="3"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {formError && (
-                <div className="patients-error modal-error">
-                  {formError}
-                </div>
-              )}
-
-              <div className="patient-form-footer">
-                <button
-                  type="button"
-                  className="modal-cancel-button"
-                  onClick={closeAddModal}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="patients-primary-button"
-                  disabled={saving}
-                >
-                  <Plus size={17} />
-                  {saving
-                    ? "Creating..."
-                    : "Create Patient"}
-                </button>
-              </div>
-            </form>
+            {renderPatientForm({
+              onSubmit: handleSubmit,
+              submitText:
+                "Create Patient",
+              submittingText:
+                "Creating...",
+              onCancel:
+                closeAddModal,
+            })}
           </div>
         </div>
       )}
 
-      {/* View Patient Modal */}
+      {/* =========================
+          EDIT PATIENT MODAL
+      ========================= */}
 
-      {showViewModal && selectedPatient && (
-        <div
-          className="patient-modal-overlay"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeViewModal();
-            }
-          }}
-        >
-          <div className="patient-view-modal">
-            <div className="patient-modal-header">
-              <div className="patient-view-heading">
-                <div className="patient-large-avatar">
-                  {getInitials(selectedPatient.name)}
-                </div>
-
+      {showEditModal &&
+        editingPatient && (
+          <div
+            className="patient-modal-overlay"
+            onMouseDown={(event) => {
+              if (
+                event.target ===
+                event.currentTarget
+              ) {
+                closeEditModal();
+              }
+            }}
+          >
+            <div className="patient-modal">
+              <div className="patient-modal-header">
                 <div>
-                  <h2>{selectedPatient.name}</h2>
+                  <h2>
+                    Edit Patient
+                  </h2>
 
                   <p>
-                    {selectedPatient.patientId}
-                    {" • "}
-                    Registered{" "}
-                    {formatDate(selectedPatient.createdAt)}
+                    Update patient profile and
+                    medical information.
                   </p>
                 </div>
+
+                <button
+                  className="modal-close-button"
+                  onClick={
+                    closeEditModal
+                  }
+                  disabled={saving}
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              <button
-                className="modal-close-button"
-                onClick={closeViewModal}
-                disabled={loadingDetails}
-              >
-                <X size={20} />
-              </button>
+              {renderPatientForm({
+                onSubmit:
+                  handleUpdatePatient,
+                submitText:
+                  "Update Patient",
+                submittingText:
+                  "Updating...",
+                onCancel:
+                  closeEditModal,
+              })}
             </div>
+          </div>
+        )}
 
-            {loadingDetails ? (
-              <div className="patient-details-loading">
-                <div className="patients-loading-icon">
-                  <Activity size={24} />
-                </div>
+      {/* =========================
+          VIEW PATIENT MODAL
+      ========================= */}
 
-                <strong>Loading patient profile...</strong>
-
-                <span>
-                  Fetching patient information and medical history.
-                </span>
-              </div>
-            ) : (
-              <div className="patient-details-content">
-                {detailsError && (
-                  <div className="patients-error modal-error">
-                    {detailsError}
-                  </div>
-                )}
-
-                <div className="patient-detail-section">
-                  <div className="detail-section-title">
-                    <UserRound size={17} />
-                    <span>Personal Information</span>
-                  </div>
-
-                  <div className="patient-detail-grid">
-                    <div>
-                      <span>Full Name</span>
-                      <strong>{selectedPatient.name}</strong>
-                    </div>
-
-                    <div>
-                      <span>Patient ID</span>
-                      <strong className="blue-detail">
-                        {selectedPatient.patientId}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Date of Birth</span>
-                      <strong>
-                        {formatDate(
-                          selectedPatient.dateOfBirth
-                        )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Gender</span>
-                      <strong>
-                        {formatGender(selectedPatient.gender)}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Phone</span>
-                      <strong>
-                        {selectedPatient.phone || "—"}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Email</span>
-                      <strong>
-                        {selectedPatient.email || "—"}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Blood Group</span>
-                      <strong>
-                        {selectedPatient.bloodGroup ||
-                          "Unknown"}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span>Status</span>
-                      <strong className="active-detail">
-                        Active
-                      </strong>
-                    </div>
-
-                    <div className="full-detail">
-                      <span>Address</span>
-                      <strong>
-                        {selectedPatient.address || "—"}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="patient-detail-section">
-                  <div className="detail-section-title">
-                    <Phone size={17} />
-                    <span>Emergency Contact</span>
+      {showViewModal &&
+        selectedPatient && (
+          <div
+            className="patient-modal-overlay"
+            onMouseDown={(event) => {
+              if (
+                event.target ===
+                event.currentTarget
+              ) {
+                closeViewModal();
+              }
+            }}
+          >
+            <div className="patient-view-modal">
+              <div className="patient-modal-header">
+                <div className="patient-view-heading">
+                  <div className="patient-large-avatar">
+                    {getInitials(
+                      selectedPatient.name
+                    )}
                   </div>
 
-                  <div className="patient-detail-grid">
-                    <div>
-                      <span>Name</span>
-                      <strong>
-                        {selectedPatient.emergencyContact
-                          ?.name || "—"}
-                      </strong>
-                    </div>
+                  <div>
+                    <h2>
+                      {
+                        selectedPatient.name
+                      }
+                    </h2>
 
-                    <div>
-                      <span>Phone</span>
-                      <strong>
-                        {selectedPatient.emergencyContact
-                          ?.phone || "—"}
-                      </strong>
-                    </div>
+                    <p>
+                      {
+                        selectedPatient.patientId
+                      }
 
-                    <div>
-                      <span>Relationship</span>
-                      <strong>
-                        {selectedPatient.emergencyContact
-                          ?.relationship || "—"}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
+                      {" • "}
 
-                <div className="patient-detail-section">
-                  <div className="detail-section-title">
-                    <Activity size={17} />
-                    <span>Medical Information</span>
-                  </div>
+                      Registered{" "}
 
-                  <div className="medical-info-card">
-                    <div>
-                      <span>Medical History</span>
-                      <p>
-                        {selectedPatient.medicalHistory ||
-                          "No medical history recorded."}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span>Allergies</span>
-
-                      {selectedPatient.allergies?.length ? (
-                        <div className="allergy-list">
-                          {selectedPatient.allergies.map(
-                            (allergy, index) => (
-                              <span key={index}>
-                                {allergy}
-                              </span>
-                            )
-                          )}
-                        </div>
-                      ) : (
-                        <p>No known allergies recorded.</p>
+                      {formatDate(
+                        selectedPatient.createdAt
                       )}
-                    </div>
-
-                    <div>
-                      <span>Notes</span>
-                      <p>
-                        {selectedPatient.notes ||
-                          "No additional notes."}
-                      </p>
-                    </div>
+                    </p>
                   </div>
                 </div>
 
-                <div className="patient-detail-section">
-                  <div className="detail-section-title">
-                    <FileText size={17} />
-                    <span>Medical Records</span>
+                <button
+                  className="modal-close-button"
+                  onClick={
+                    closeViewModal
+                  }
+                  disabled={
+                    loadingDetails
+                  }
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {loadingDetails ? (
+                <div className="patient-details-loading">
+                  <div className="patients-loading-icon">
+                    <Activity size={24} />
                   </div>
 
-                  {medicalRecords.length === 0 ? (
-                    <div className="no-records">
-                      <FileText size={20} />
+                  <strong>
+                    Loading patient
+                    profile...
+                  </strong>
 
-                      <span>
-                        No medical records available.
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="medical-record-list">
-                      {medicalRecords.map((record) => (
-                        <div
-                          className="medical-record-card"
-                          key={record._id}
-                        >
-                          <div className="record-date">
-                            <CalendarDays size={15} />
-                            {formatDate(record.visitDate)}
-                          </div>
-
-                          <div className="record-content">
-                            <strong>
-                              {record.diagnosis}
-                            </strong>
-
-                            <p>
-                              <b>Complaint:</b>{" "}
-                              {record.chiefComplaint}
-                            </p>
-
-                            {record.treatmentPlan && (
-                              <p>
-                                <b>Treatment:</b>{" "}
-                                {record.treatmentPlan}
-                              </p>
-                            )}
-
-                            {record.followUpDate && (
-                              <p>
-                                <b>Follow-up:</b>{" "}
-                                {formatDate(
-                                  record.followUpDate
-                                )}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                  <span>
+                    Fetching patient
+                    information and
+                    medical history.
+                  </span>
+                </div>
+              ) : (
+                <div className="patient-details-content">
+                  {detailsError && (
+                    <div className="patients-error modal-error">
+                      {detailsError}
                     </div>
                   )}
+
+                  {/* PERSONAL */}
+
+                  <div className="patient-detail-section">
+                    <div className="detail-section-title">
+                      <UserRound size={17} />
+                      <span>
+                        Personal Information
+                      </span>
+                    </div>
+
+                    <div className="patient-detail-grid">
+                      <div>
+                        <span>
+                          Full Name
+                        </span>
+
+                        <strong>
+                          {
+                            selectedPatient.name
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Patient ID
+                        </span>
+
+                        <strong className="blue-detail">
+                          {
+                            selectedPatient.patientId
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Date of Birth
+                        </span>
+
+                        <strong>
+                          {formatDate(
+                            selectedPatient.dateOfBirth
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Gender
+                        </span>
+
+                        <strong>
+                          {formatGender(
+                            selectedPatient.gender
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Phone
+                        </span>
+
+                        <strong>
+                          {
+                            selectedPatient.phone ||
+                            "—"
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Email
+                        </span>
+
+                        <strong>
+                          {
+                            selectedPatient.email ||
+                            "—"
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Blood Group
+                        </span>
+
+                        <strong>
+                          {
+                            selectedPatient.bloodGroup ||
+                            "Unknown"
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Status
+                        </span>
+
+                        <strong className="active-detail">
+                          Active
+                        </strong>
+                      </div>
+
+                      <div className="full-detail">
+                        <span>
+                          Address
+                        </span>
+
+                        <strong>
+                          {
+                            selectedPatient.address ||
+                            "—"
+                          }
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* EMERGENCY */}
+
+                  <div className="patient-detail-section">
+                    <div className="detail-section-title">
+                      <Phone size={17} />
+
+                      <span>
+                        Emergency Contact
+                      </span>
+                    </div>
+
+                    <div className="patient-detail-grid">
+                      <div>
+                        <span>
+                          Name
+                        </span>
+
+                        <strong>
+                          {selectedPatient
+                            .emergencyContact
+                            ?.name || "—"}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Phone
+                        </span>
+
+                        <strong>
+                          {selectedPatient
+                            .emergencyContact
+                            ?.phone || "—"}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Relationship
+                        </span>
+
+                        <strong>
+                          {selectedPatient
+                            .emergencyContact
+                            ?.relationship ||
+                            "—"}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MEDICAL */}
+
+                  <div className="patient-detail-section">
+                    <div className="detail-section-title">
+                      <Activity size={17} />
+
+                      <span>
+                        Medical Information
+                      </span>
+                    </div>
+
+                    <div className="medical-info-card">
+                      <div>
+                        <span>
+                          Medical History
+                        </span>
+
+                        <p>
+                          {
+                            selectedPatient.medicalHistory ||
+                            "No medical history recorded."
+                          }
+                        </p>
+                      </div>
+
+                      <div>
+                        <span>
+                          Allergies
+                        </span>
+
+                        {selectedPatient
+                          .allergies
+                          ?.length ? (
+                          <div className="allergy-list">
+                            {selectedPatient.allergies.map(
+                              (
+                                allergy,
+                                index
+                              ) => (
+                                <span
+                                  key={
+                                    index
+                                  }
+                                >
+                                  {allergy}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        ) : (
+                          <p>
+                            No known
+                            allergies
+                            recorded.
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <span>
+                          Notes
+                        </span>
+
+                        <p>
+                          {
+                            selectedPatient.notes ||
+                            "No additional notes."
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MEDICAL RECORDS */}
+
+                  <div className="patient-detail-section">
+                    <div className="detail-section-title">
+                      <FileText size={17} />
+
+                      <span>
+                        Medical Records
+                      </span>
+                    </div>
+
+                    {medicalRecords.length ===
+                    0 ? (
+                      <div className="no-records">
+                        <FileText
+                          size={20}
+                        />
+
+                        <span>
+                          No medical
+                          records available.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="medical-record-list">
+                        {medicalRecords.map(
+                          (record) => (
+                            <div
+                              className="medical-record-card"
+                              key={
+                                record._id
+                              }
+                            >
+                              <div className="record-date">
+                                <CalendarDays
+                                  size={15}
+                                />
+
+                                {formatDate(
+                                  record.visitDate
+                                )}
+                              </div>
+
+                              <div className="record-content">
+                                <strong>
+                                  {
+                                    record.diagnosis
+                                  }
+                                </strong>
+
+                                <p>
+                                  <b>
+                                    Complaint:
+                                  </b>{" "}
+                                  {
+                                    record.chiefComplaint
+                                  }
+                                </p>
+
+                                {record.treatmentPlan && (
+                                  <p>
+                                    <b>
+                                      Treatment:
+                                    </b>{" "}
+                                    {
+                                      record.treatmentPlan
+                                    }
+                                  </p>
+                                )}
+
+                                {record.followUpDate && (
+                                  <p>
+                                    <b>
+                                      Follow-up:
+                                    </b>{" "}
+                                    {formatDate(
+                                      record.followUpDate
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+
+                    {/* VIEW MODAL ACTIONS */}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent:
+                          "flex-end",
+                        gap: "10px",
+                        marginTop:
+                          "20px",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="modal-cancel-button"
+                        onClick={() =>
+                          openEditModal(
+                            selectedPatient
+                          )
+                        }
+                      >
+                        <Edit3 size={16} />
+                        Edit Patient
+                      </button>
+
+                      <button
+                        type="button"
+                        className="modal-cancel-button"
+                        onClick={() =>
+                          handleDeactivatePatient(
+                            selectedPatient
+                          )
+                        }
+                        disabled={
+                          deactivating
+                        }
+                      >
+                        {deactivating
+                          ? "Deactivating..."
+                          : "Deactivate"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 };

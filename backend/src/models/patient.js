@@ -8,6 +8,13 @@ const patientSchema = new mongoose.Schema(
       trim: true,
     },
 
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      unique: true,
+      sparse: true,
+    },
+
     name: {
       type: String,
       required: [true, "Patient name is required"],
@@ -104,12 +111,9 @@ const patientSchema = new mongoose.Schema(
       default: true,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// Generate a readable patient ID
 patientSchema.pre("save", async function () {
   if (this.patientId) {
     return;

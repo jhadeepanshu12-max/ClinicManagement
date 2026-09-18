@@ -19,6 +19,7 @@ import {
   Stethoscope,
   UserRound,
   Users,
+  UsersRound,
   Wallet,
   X,
 } from "lucide-react";
@@ -34,6 +35,16 @@ const navigation = [
       { label: "Patients", icon: Users, path: "/patients" },
       { label: "Doctors", icon: Stethoscope, path: "/doctors" },
       { label: "Appointments", icon: CalendarDays, path: "/appointments" },
+    ],
+  },
+  {
+    section: "ADMINISTRATION",
+    items: [
+      {
+        label: "User Management",
+        icon: UsersRound,
+        path: "/user-management",
+      },
     ],
   },
   {
