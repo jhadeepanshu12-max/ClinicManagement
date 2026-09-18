@@ -1,0 +1,703 @@
+.patient-register-page {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: 48px 20px 60px;
+  background:
+    radial-gradient(
+      circle at 10% 15%,
+      rgba(99, 102, 241, 0.14),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 90% 80%,
+      rgba(14, 165, 233, 0.12),
+      transparent 30%
+    ),
+    linear-gradient(
+      135deg,
+      #f8fbff 0%,
+      #eef4ff 48%,
+      #f7f9ff 100%
+    );
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #172033;
+}
+
+.patient-register-page *,
+.patient-register-page *::before,
+.patient-register-page *::after {
+  box-sizing: border-box;
+}
+
+.patient-register-orb {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(2px);
+  z-index: 0;
+}
+
+.patient-register-orb-one {
+  width: 320px;
+  height: 320px;
+  top: -130px;
+  left: -100px;
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.patient-register-orb-two {
+  width: 280px;
+  height: 280px;
+  right: -90px;
+  top: 25%;
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.patient-register-orb-three {
+  width: 220px;
+  height: 220px;
+  bottom: -80px;
+  left: 20%;
+  background: rgba(129, 140, 248, 0.07);
+}
+
+.patient-register-container {
+  width: min(960px, 100%);
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Brand */
+
+.patient-register-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  margin-bottom: 34px;
+}
+
+.patient-register-logo {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: linear-gradient(
+    135deg,
+    #4f46e5,
+    #2563eb
+  );
+  color: white;
+  font-size: 30px;
+  font-weight: 700;
+  box-shadow:
+    0 12px 30px rgba(79, 70, 229, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.patient-register-logo span {
+  transform: translateY(-1px);
+}
+
+.patient-register-brand h1 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  color: #172033;
+}
+
+.patient-register-brand p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7c88a1;
+  letter-spacing: 0.3px;
+}
+
+/* Heading */
+
+.patient-register-heading {
+  max-width: 650px;
+  margin: 0 auto 30px;
+  text-align: center;
+}
+
+.patient-register-eyebrow {
+  width: fit-content;
+  margin: 0 auto 12px;
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(79, 70, 229, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+}
+
+.patient-register-heading h2 {
+  margin: 0;
+  color: #111827;
+  font-size: clamp(30px, 4vw, 42px);
+  line-height: 1.1;
+  letter-spacing: -1.5px;
+}
+
+.patient-register-heading p {
+  max-width: 620px;
+  margin: 14px auto 0;
+  color: #718096;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* Progress */
+
+.patient-register-progress {
+  width: min(640px, 100%);
+  margin: 0 auto 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.patient-progress-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9aa5b8;
+}
+
+.patient-progress-step span {
+  width: 31px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e7ebf3;
+  color: #7c879a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.patient-progress-step small {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.patient-progress-step.active {
+  color: #4f46e5;
+}
+
+.patient-progress-step.active span {
+  background: linear-gradient(
+    135deg,
+    #4f46e5,
+    #2563eb
+  );
+  color: white;
+  box-shadow:
+    0 6px 16px rgba(79, 70, 229, 0.22);
+}
+
+.patient-progress-line {
+  flex: 1;
+  max-width: 110px;
+  height: 2px;
+  margin: 0 13px;
+  background: linear-gradient(
+    90deg,
+    #c7d2fe,
+    #bfdbfe
+  );
+}
+
+/* Alerts */
+
+.patient-register-alert {
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.patient-register-alert.error {
+  border: 1px solid #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.patient-register-alert.success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+/* Form */
+
+.patient-register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.patient-form-section {
+  padding: 28px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 15px 45px rgba(30, 41, 59, 0.06),
+    0 2px 8px rgba(30, 41, 59, 0.025);
+  backdrop-filter: blur(14px);
+}
+
+.patient-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.patient-section-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.patient-section-icon.emergency {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.patient-section-icon.medical {
+  background: #ecfeff;
+  color: #0891b2;
+}
+
+.patient-section-heading h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.patient-section-heading p {
+  margin: 4px 0 0;
+  color: #8a95a8;
+  font-size: 12px;
+}
+
+.patient-form-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 19px;
+}
+
+.patient-field {
+  min-width: 0;
+}
+
+.patient-field label {
+  display: block;
+  margin-bottom: 8px;
+  color: #354052;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.patient-field label span {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.patient-input-wrapper {
+  min-height: 49px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 1px solid #dfe5ee;
+  border-radius: 12px;
+  background: #fbfcfe;
+  color: #94a0b2;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.patient-input-wrapper:focus-within {
+  border-color: #818cf8;
+  background: white;
+  box-shadow:
+    0 0 0 4px rgba(99, 102, 241, 0.09);
+}
+
+.patient-input-wrapper:focus-within svg {
+  color: #4f46e5;
+}
+
+.patient-input-wrapper input,
+.patient-input-wrapper select {
+  width: 100%;
+  min-width: 0;
+  height: 47px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #1e293b;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.patient-input-wrapper input::placeholder {
+  color: #a8b1bf;
+}
+
+.patient-input-wrapper select {
+  cursor: pointer;
+}
+
+.patient-input-wrapper input[type="date"] {
+  color-scheme: light;
+}
+
+.patient-input-symbol {
+  width: 18px;
+  color: #94a0b2;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.patient-field textarea {
+  width: 100%;
+  min-height: 125px;
+  padding: 14px;
+  resize: vertical;
+  border: 1px solid #dfe5ee;
+  border-radius: 12px;
+  outline: none;
+  background: #fbfcfe;
+  color: #1e293b;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.patient-field textarea::placeholder {
+  color: #a8b1bf;
+}
+
+.patient-field textarea:focus {
+  border-color: #818cf8;
+  background: white;
+  box-shadow:
+    0 0 0 4px rgba(99, 102, 241, 0.09);
+}
+
+.patient-medical-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+}
+
+.patient-field-hint {
+  display: block;
+  margin-top: 7px;
+  color: #9aa4b5;
+  font-size: 11px;
+}
+
+/* Submit */
+
+.patient-register-submit {
+  min-height: 54px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    #4f46e5,
+    #2563eb
+  );
+  color: white;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow:
+    0 12px 25px rgba(79, 70, 229, 0.22);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.patient-register-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 16px 30px rgba(79, 70, 229, 0.28);
+}
+
+.patient-register-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.patient-register-submit:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.patient-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: patientSpin 0.7s linear infinite;
+}
+
+@keyframes patientSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Navigation */
+
+.patient-register-navigation {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 25px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.patient-nav-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 3px;
+  border: none;
+  background: transparent;
+  color: #667085;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.patient-nav-button:hover {
+  color: #4f46e5;
+  transform: translateY(-1px);
+}
+
+/* Security */
+
+.patient-register-security {
+  width: min(680px, 100%);
+  margin: 28px auto 0;
+  padding: 15px 17px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 15px;
+  background: rgba(239, 246, 255, 0.72);
+}
+
+.patient-security-icon {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: white;
+  color: #2563eb;
+  box-shadow:
+    0 3px 10px rgba(37, 99, 235, 0.08);
+}
+
+.patient-register-security div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.patient-register-security strong {
+  color: #334155;
+  font-size: 12px;
+}
+
+.patient-register-security span {
+  color: #718096;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Footer */
+
+.patient-register-footer {
+  margin: 22px 0 0;
+  text-align: center;
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.patient-register-footer span {
+  margin: 0 7px;
+  color: #c0c7d2;
+}
+
+/* Responsive */
+
+@media (max-width: 720px) {
+  .patient-register-page {
+    padding: 30px 14px 45px;
+  }
+
+  .patient-register-brand {
+    margin-bottom: 27px;
+  }
+
+  .patient-register-heading {
+    margin-bottom: 25px;
+  }
+
+  .patient-register-heading h2 {
+    font-size: 31px;
+  }
+
+  .patient-register-heading p {
+    font-size: 13px;
+  }
+
+  .patient-register-progress {
+    margin-bottom: 23px;
+  }
+
+  .patient-progress-step {
+    gap: 0;
+  }
+
+  .patient-progress-step small {
+    display: none;
+  }
+
+  .patient-progress-line {
+    max-width: 75px;
+    margin: 0 9px;
+  }
+
+  .patient-form-section {
+    padding: 21px 17px;
+    border-radius: 18px;
+  }
+
+  .patient-form-grid {
+    grid-template-columns: 1fr;
+    gap: 17px;
+  }
+
+  .patient-section-heading {
+    margin-bottom: 20px;
+  }
+
+  .patient-register-security {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 430px) {
+  .patient-register-page {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .patient-register-logo {
+    width: 43px;
+    height: 43px;
+    border-radius: 13px;
+    font-size: 27px;
+  }
+
+  .patient-register-brand h1 {
+    font-size: 22px;
+  }
+
+  .patient-register-heading h2 {
+    font-size: 28px;
+  }
+
+  .patient-register-heading p {
+    font-size: 12px;
+  }
+
+  .patient-progress-line {
+    max-width: 48px;
+  }
+
+  .patient-form-section {
+    padding: 18px 14px;
+  }
+
+  .patient-section-icon {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .patient-section-heading h3 {
+    font-size: 16px;
+  }
+
+  .patient-register-navigation {
+    gap: 17px;
+  }
+
+  .patient-register-security {
+    padding: 13px;
+  }
+}
