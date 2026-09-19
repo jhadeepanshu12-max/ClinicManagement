@@ -6,16 +6,16 @@ import {
   Routes,
 } from "react-router-dom";
 
-/* =========================
-   AUTH / ROLE PAGES
-========================= */
+// ==========================================
+// AUTH / PUBLIC PAGES
+// ==========================================
 
 import Login from "./pages/Login";
 import RoleSelection from "./pages/RoleSelection";
 
-/* =========================
-   ADMIN / SHARED PAGES
-========================= */
+// ==========================================
+// ADMIN PAGES
+// ==========================================
 
 import Dashboard from "./Dashboard";
 import Patients from "./pages/Patients";
@@ -29,35 +29,45 @@ import Expenses from "./pages/Expenses";
 import Settings from "./pages/Settings";
 import UserManagement from "./pages/UserManagement";
 
-/* =========================
-   ROLE-SPECIFIC DASHBOARDS
-========================= */
+// ==========================================
+// DOCTOR PAGES
+// ==========================================
 
 import DoctorDashboard from "./pages/DoctorDashboard";
+import DoctorProfile from "./pages/DoctorProfile";
+
+// ==========================================
+// STAFF PAGES
+// ==========================================
+
 import StaffDashboard from "./pages/StaffDashboard";
 
-/* =========================
-   PATIENT PORTAL
-========================= */
+// ==========================================
+// PATIENT PAGES
+// ==========================================
 
 import PatientDashboard from "./pages/patient/PatientDashboard";
 import PatientPortalSection from "./pages/patient/PatientPortalSection";
 import PatientRegister from "./pages/patient/PatientRegister";
 
-/* =========================
-   GET STORED USER
-========================= */
+// ==========================================
+// GET STORED USER
+// ==========================================
 
 const getUser = () => {
   try {
     const storedUser =
-      localStorage.getItem("clinic_user");
+      localStorage.getItem(
+        "clinic_user"
+      );
 
     if (!storedUser) {
       return null;
     }
 
-    return JSON.parse(storedUser);
+    return JSON.parse(
+      storedUser
+    );
   } catch (error) {
     console.error(
       "Error reading clinic user:",
@@ -68,11 +78,13 @@ const getUser = () => {
   }
 };
 
-/* =========================
-   ROLE → DEFAULT ROUTE
-========================= */
+// ==========================================
+// DEFAULT ROUTE BY ROLE
+// ==========================================
 
-const getDefaultRoute = (role) => {
+const getDefaultRoute = (
+  role
+) => {
   switch (role) {
     case "admin":
       return "/dashboard";
@@ -91,19 +103,22 @@ const getDefaultRoute = (role) => {
   }
 };
 
-/* =========================
-   PROTECTED ROUTE
-========================= */
+// ==========================================
+// PROTECTED ROUTE
+// ==========================================
 
 const ProtectedRoute = ({
   children,
   allowedRoles,
 }) => {
   const token =
-    localStorage.getItem("clinic_token");
+    localStorage.getItem(
+      "clinic_token"
+    );
 
   const user = getUser();
 
+  // Not logged in
   if (!token || !user) {
     return (
       <Navigate
@@ -113,13 +128,18 @@ const ProtectedRoute = ({
     );
   }
 
+  // Role is not allowed
   if (
     allowedRoles &&
-    !allowedRoles.includes(user.role)
+    !allowedRoles.includes(
+      user.role
+    )
   ) {
     return (
       <Navigate
-        to={getDefaultRoute(user.role)}
+        to={getDefaultRoute(
+          user.role
+        )}
         replace
       />
     );
@@ -128,20 +148,27 @@ const ProtectedRoute = ({
   return children;
 };
 
-/* =========================
-   PUBLIC ROUTE
-========================= */
+// ==========================================
+// PUBLIC ROUTE
+// ==========================================
 
-const PublicRoute = ({ children }) => {
+const PublicRoute = ({
+  children,
+}) => {
   const token =
-    localStorage.getItem("clinic_token");
+    localStorage.getItem(
+      "clinic_token"
+    );
 
   const user = getUser();
 
+  // Already logged in
   if (token && user) {
     return (
       <Navigate
-        to={getDefaultRoute(user.role)}
+        to={getDefaultRoute(
+          user.role
+        )}
         replace
       />
     );
@@ -150,13 +177,15 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
-/* =========================
-   ROOT REDIRECT
-========================= */
+// ==========================================
+// ROOT REDIRECT
+// ==========================================
 
 const RootRedirect = () => {
   const token =
-    localStorage.getItem("clinic_token");
+    localStorage.getItem(
+      "clinic_token"
+    );
 
   const user = getUser();
 
@@ -171,24 +200,26 @@ const RootRedirect = () => {
 
   return (
     <Navigate
-      to={getDefaultRoute(user.role)}
+      to={getDefaultRoute(
+        user.role
+      )}
       replace
     />
   );
 };
 
-/* =========================
-   APP
-========================= */
+// ==========================================
+// APP
+// ==========================================
 
 const App = () => {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* =========================
+        {/* ==================================
             PUBLIC ROUTES
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/role-selection"
@@ -217,69 +248,94 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             ADMIN DASHBOARD
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/dashboard"
           element={
             <ProtectedRoute
-              allowedRoles={["admin"]}
+              allowedRoles={[
+                "admin",
+              ]}
             >
               <Dashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* =========================
+        {/* ==================================
             ADMIN USER MANAGEMENT
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/user-management"
           element={
             <ProtectedRoute
-              allowedRoles={["admin"]}
+              allowedRoles={[
+                "admin",
+              ]}
             >
               <UserManagement />
             </ProtectedRoute>
           }
         />
 
-        {/* =========================
+        {/* ==================================
             DOCTOR DASHBOARD
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/doctor-dashboard"
           element={
             <ProtectedRoute
-              allowedRoles={["doctor"]}
+              allowedRoles={[
+                "doctor",
+              ]}
             >
               <DoctorDashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* =========================
+        {/* ==================================
+            DOCTOR PROFILE
+        ================================== */}
+
+        <Route
+          path="/doctor-profile"
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                "doctor",
+              ]}
+            >
+              <DoctorProfile />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ==================================
             STAFF DASHBOARD
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/staff-dashboard"
           element={
             <ProtectedRoute
-              allowedRoles={["receptionist"]}
+              allowedRoles={[
+                "receptionist",
+              ]}
             >
               <StaffDashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PATIENT MANAGEMENT
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/patients"
@@ -296,9 +352,9 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             DOCTORS
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/doctors"
@@ -315,9 +371,9 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             APPOINTMENTS
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/appointments"
@@ -334,9 +390,9 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             MEDICAL RECORDS
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/medical-records"
@@ -353,9 +409,9 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PRESCRIPTIONS
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/prescription"
@@ -387,9 +443,9 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             BILLING
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/billing"
@@ -406,9 +462,9 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             INVENTORY
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/inventory"
@@ -424,9 +480,9 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             EXPENSES
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/expenses"
@@ -442,45 +498,51 @@ const App = () => {
           }
         />
 
-        {/* =========================
-            SETTINGS
-        ========================= */}
+        {/* ==================================
+            ADMIN SETTINGS
+        ================================== */}
 
         <Route
           path="/settings"
           element={
             <ProtectedRoute
-              allowedRoles={["admin"]}
+              allowedRoles={[
+                "admin",
+              ]}
             >
               <Settings />
             </ProtectedRoute>
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PATIENT DASHBOARD
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/patient-dashboard"
           element={
             <ProtectedRoute
-              allowedRoles={["patient"]}
+              allowedRoles={[
+                "patient",
+              ]}
             >
               <PatientDashboard />
             </ProtectedRoute>
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PATIENT APPOINTMENTS
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/patient/appointments"
           element={
             <ProtectedRoute
-              allowedRoles={["patient"]}
+              allowedRoles={[
+                "patient",
+              ]}
             >
               <PatientPortalSection
                 section="appointments"
@@ -489,15 +551,17 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PATIENT MEDICAL RECORDS
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/patient/medical-records"
           element={
             <ProtectedRoute
-              allowedRoles={["patient"]}
+              allowedRoles={[
+                "patient",
+              ]}
             >
               <PatientPortalSection
                 section="medical-records"
@@ -506,15 +570,17 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PATIENT PRESCRIPTIONS
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/patient/prescriptions"
           element={
             <ProtectedRoute
-              allowedRoles={["patient"]}
+              allowedRoles={[
+                "patient",
+              ]}
             >
               <PatientPortalSection
                 section="prescriptions"
@@ -523,15 +589,17 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PATIENT BILLING
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/patient/billing"
           element={
             <ProtectedRoute
-              allowedRoles={["patient"]}
+              allowedRoles={[
+                "patient",
+              ]}
             >
               <PatientPortalSection
                 section="billing"
@@ -540,15 +608,17 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             PATIENT PROFILE
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/patient/profile"
           element={
             <ProtectedRoute
-              allowedRoles={["patient"]}
+              allowedRoles={[
+                "patient",
+              ]}
             >
               <PatientPortalSection
                 section="profile"
@@ -557,22 +627,26 @@ const App = () => {
           }
         />
 
-        {/* =========================
+        {/* ==================================
             ROOT
-        ========================= */}
+        ================================== */}
 
         <Route
           path="/"
-          element={<RootRedirect />}
+          element={
+            <RootRedirect />
+          }
         />
 
-        {/* =========================
+        {/* ==================================
             UNKNOWN ROUTES
-        ========================= */}
+        ================================== */}
 
         <Route
           path="*"
-          element={<RootRedirect />}
+          element={
+            <RootRedirect />
+          }
         />
 
       </Routes>

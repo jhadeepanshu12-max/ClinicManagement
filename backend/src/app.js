@@ -17,6 +17,7 @@ const userManagementRoutes = require("./routes/userManagementRoutes");
 const userRoutes = require("./routes/userRoutes");
 const patientRoutes = require("./routes/patientRoutes");
 const doctorRoutes = require("./routes/doctorRoutes");
+const doctorProfileRoutes = require("./routes/doctorProfileRoutes");
 const appointmentRoutes = require("./routes/appointmentRoutes");
 const medicalRecordRoutes = require("./routes/medicalRecordRoutes");
 const prescriptionRoutes = require("./routes/prescriptionRoutes");
@@ -27,14 +28,10 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 
 const app = express();
 
-/*
-|--------------------------------------------------------------------------
-| Global Middleware
-|--------------------------------------------------------------------------
-*/
-
+// Security
 app.use(helmet());
 
+// CORS
 app.use(
   cors({
     origin: true,
@@ -42,131 +39,120 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+// Body parsers
+app.use(
+  express.json({
+    limit: "2mb",
+  })
+);
 
+app.use(
+  express.urlencoded({
+    extended: true,
+  })
+);
+
+// Logging
 app.use(morgan("dev"));
 
-/*
-|--------------------------------------------------------------------------
-| Authentication Routes
-|--------------------------------------------------------------------------
-*/
+// ==========================================
+// AUTHENTICATION ROUTES
+// ==========================================
 
-// Admin / Doctor / Staff login
 app.use(
   "/api/auth",
   authRoutes
 );
 
-// Patient registration/login
 app.use(
   "/api/patient-auth",
   patientAuthRoutes
 );
 
-/*
-|--------------------------------------------------------------------------
-| Patient Portal Routes
-|--------------------------------------------------------------------------
-*/
+// ==========================================
+// PATIENT PORTAL
+// ==========================================
 
 app.use(
   "/api/patient-portal",
   patientPortalRoutes
 );
 
-/*
-|--------------------------------------------------------------------------
-| Admin User Management
-|--------------------------------------------------------------------------
-|
-| Admin can:
-| - Create Doctor
-| - Create Staff
-| - View Doctor/Staff
-| - Update Doctor/Staff
-| - Activate/Deactivate
-| - Reset Password
-|
-*/
+// ==========================================
+// ADMIN USER MANAGEMENT
+// ==========================================
 
 app.use(
   "/api/user-management",
   userManagementRoutes
 );
 
-/*
-|--------------------------------------------------------------------------
-| Main Clinic Modules
-|--------------------------------------------------------------------------
-*/
+// ==========================================
+// MAIN MODULES
+// ==========================================
 
-// Users
 app.use(
   "/api/users",
   userRoutes
 );
 
-// Patients
 app.use(
   "/api/patients",
   patientRoutes
 );
 
-// Doctors
 app.use(
   "/api/doctors",
   doctorRoutes
 );
 
-// Appointments
+// ==========================================
+// DOCTOR SELF PROFILE
+// ==========================================
+
+app.use(
+  "/api/doctor-profile",
+  doctorProfileRoutes
+);
+
 app.use(
   "/api/appointments",
   appointmentRoutes
 );
 
-// Medical Records
 app.use(
   "/api/medical-records",
   medicalRecordRoutes
 );
 
-// Prescriptions
 app.use(
   "/api/prescriptions",
   prescriptionRoutes
 );
 
-// Billing
 app.use(
   "/api/billing",
   billingRoutes
 );
 
-// Inventory
 app.use(
   "/api/inventory",
   inventoryRoutes
 );
 
-// Expenses
 app.use(
   "/api/expenses",
   expenseRoutes
 );
 
-// Dashboard
 app.use(
   "/api/dashboard",
   dashboardRoutes
 );
 
-/*
-|--------------------------------------------------------------------------
-| Health Check
-|--------------------------------------------------------------------------
-*/
+// ==========================================
+// HEALTH CHECK
+// ==========================================
 
 app.get(
   "/api/health",
@@ -179,11 +165,9 @@ app.get(
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| 404 Handler
-|--------------------------------------------------------------------------
-*/
+// ==========================================
+// 404 HANDLER
+// ==========================================
 
 app.use(
   (req, res) => {
@@ -194,11 +178,9 @@ app.use(
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| Global Error Handler
-|--------------------------------------------------------------------------
-*/
+// ==========================================
+// GLOBAL ERROR HANDLER
+// ==========================================
 
 app.use(
   (
